@@ -2,7 +2,8 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useState } from 'react'
 import { ToastProvider } from '../components/ui'
 import { getToken, setToken } from '../api/client'
-import MiHome from '../pages/mi/Home'
+import ComingNext from '../pages/mi/ComingNext'
+import MiDashboard from '../pages/mi/Dashboard'
 import ProductSwitch from './ProductSwitch'
 
 function Sidebar() {
@@ -24,7 +25,7 @@ function Sidebar() {
       <div className="side-foot">
         <div className="nav-section">Status</div>
         <div style={{ padding: '0 0.6rem', fontSize: 12, color: 'var(--muted)' }}>
-          Admin — later phases
+          Profiles and meetings — next phases
         </div>
       </div>
     </aside>
@@ -70,7 +71,9 @@ function ShellInner() {
       <div className="main">
         <TopBar />
         <Routes>
-          <Route index element={<MiHome />} />
+          <Route index element={<MiDashboard />} />
+          <Route path="profiles" element={<ComingNext title="MI profiles" />} />
+          <Route path="meetings" element={<ComingNext title="Meetings" />} />
           <Route path="*" element={<Navigate to="/MI/admin" replace />} />
         </Routes>
       </div>
