@@ -47,6 +47,22 @@ export const EDGE_KINDS = [
 /** Tool verbs allowed on a Tool node. */
 export const TOOL_VERBS = ['transfer', 'hangup']
 
+/** ListenSlot validators — copy of internal/flow/slot.go until the catalog exposes them. */
+export const SLOT_VALIDATORS = ['nonempty', 'enum', 'regex']
+
+/** Decide when.slot keys always allowed, plus any ListenSlot-declared key. */
+export const WELL_KNOWN_SLOTS = [
+  'active_language',
+  'preferred_language',
+  'department',
+  'ani',
+  'transfer_target',
+  'transfer_number',
+]
+
+/** Node interrupt modes — copy of Go; unused in 1.3 UI, catalog later. */
+export const INTERRUPT_MODES = ['inherit', 'barge_in', 'hotword', 'none']
+
 /** Ports a gateway can be registered on. */
 export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'skill']
 
@@ -291,6 +307,9 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} [tool]        required on Tool: transfer | hangup
  * @property {FlowNodeRepair} [repair]
  * @property {*}      [slot]
+ * @property {*}      [decide]
+ * @property {string[]} [global_intents]
+ * @property {string[]} [allowed_intents]
  * @property {string} [matrix_intent]
  *
  * @typedef {Object} FlowEdge

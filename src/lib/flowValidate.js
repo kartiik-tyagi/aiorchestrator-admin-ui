@@ -8,7 +8,7 @@
  * Every rule below maps 1:1 to a check in the Go validator; keep them in sync.
  */
 
-import { FLOW_SCHEMA_ID } from '../api/types'
+import { FLOW_SCHEMA_ID, SLOT_VALIDATORS, WELL_KNOWN_SLOTS } from '../api/types.js'
 const TOOL_VERBS = ['transfer', 'hangup']
 export function validateFlow(doc, catalog) {
   const issues = []
@@ -29,6 +29,9 @@ export function validateFlow(doc, catalog) {
   const dispositions = catalog?.disposition_final ?? []
   if (doc.schema_id !== FLOW_SCHEMA_ID) err(`schema_id must be ${FLOW_SCHEMA_ID}`)
   if (!doc.default_locale?.trim()) err('default_locale required')
+  if (doc.cx != null && typeof doc.cx === 'object' && Object.keys(doc.cx).length > 0) {
+    err('Layout is not part of the flow — remove cx. Canvas positions stay in this browser only.')
+  }
 
   /* ---- nodes ---- */
   const byId = new Map()
@@ -187,20 +190,159 @@ export function validateFlow(doc, catalog) {
         )
     }
 
-    // Declared in the schema, unimplemented in the cursor.
-    if (n.type === 'Decide')
-      err(`Decide nodes are not implemented — the call errors on reaching "${id}"`, id)
   }
 
-  /* ---- edge kinds the runtime ignores ---- */
+  /* ---- CC.5 Decide / ListenSlot ----------------------------------------- */
+  const SLOT_KEY_RE = /^[a-z][a-z0-9_]*$/
+  const declaredSlots = new Set(WELL_KNOWN_SLOTS)
+  for (const n of doc.nodes) {
+    if (n.type !== 'ListenSlot') continue
+    const id = n.id?.trim()
+    if (!id) continue
+    const spec = n.slot
+    if (!spec || typeof spec !== 'object') {
+      err(`ListenSlot "${id}" needs a slot key and a validator.`, id)
+      continue
+    }
+    const key = (spec.key ?? '').trim()
+    const validator = (spec.validator ?? '').trim()
+    if (!key || !SLOT_KEY_RE.test(key))
+      err(`ListenSlot "${id}" slot.key must match ^[a-z][a-z0-9_]*$`, id)
+    else declaredSlots.add(key)
+    if (!SLOT_VALIDATORS.includes(validator))
+      err(`ListenSlot "${id}" needs a slot key and a validator.`, id)
+    if (validator === 'enum' && !(spec.enum ?? []).length)
+      err(`ListenSlot "${id}" needs slot.enum when validator is enum`, id)
+    if (validator === 'regex') {
+      const pat = (spec.pattern ?? '').trim()
+      if (!pat) err(`ListenSlot "${id}" needs slot.pattern when validator is regex`, id)
+      else {
+        try {
+          new RegExp(pat)
+        } catch {
+          err(`ListenSlot "${id}" slot.pattern is not a valid regex`, id)
+        }
+      }
+    }
+  }
+
+  const whenOps = (w) => {
+    if (!w || typeof w !== 'object') return 0
+    let n = 0
+    if (w.eq != null) n++
+    if (Array.isArray(w.in)) n++
+    if (typeof w.exists === 'boolean') n++
+    return n
+  }
+  const whenSig = (w) => {
+    const slot = (w?.slot ?? '').trim()
+    if (w?.eq != null) return `eq|${slot}|${String(w.eq).trim()}`
+    if (Array.isArray(w.in)) return `in|${slot}|${w.in.join(',')}`
+    if (typeof w.exists === 'boolean') return `exists|${slot}|${w.exists}`
+    return `empty|${slot}`
+  }
+  for (const n of doc.nodes) {
+    if (n.type !== 'Decide') continue
+    const id = n.id?.trim()
+    if (!id) continue
+    const spec = n.decide
+    if (!spec || typeof spec !== 'object') {
+      err(`Decide "${id}" needs at least one rule and an else path.`, id)
+      continue
+    }
+    const rules = spec.rules ?? []
+    const elseId = (spec.else_edge_id ?? '').trim()
+    const outIds = new Set(outOf(id).map((e) => e.id))
+    if (!rules.length || !elseId) {
+      err(`Decide "${id}" needs at least one rule and an else path.`, id)
+      continue
+    }
+    if (!outIds.has(elseId))
+      err(`Decide "${id}" else path is not an outgoing edge`, id)
+    const seenWhen = new Set()
+    rules.forEach((r, i) => {
+      const eid = (r?.edge_id ?? '').trim()
+      if (!eid) err(`Decide "${id}" rule ${i + 1} needs an outgoing edge`, id)
+      else if (!outIds.has(eid)) err(`Decide "${id}" rule ${i + 1} edge is not outgoing`, id)
+      const slot = (r?.when?.slot ?? '').trim()
+      if (!slot) err(`Decide "${id}" rule ${i + 1} needs a slot`, id)
+      else if (!declaredSlots.has(slot))
+        err(`Decide "${id}" rule ${i + 1} slot "${slot}" is not a ListenSlot key or a well-known slot`, id)
+      if (whenOps(r?.when) !== 1)
+        err(`Decide "${id}" rule ${i + 1} must use exactly one of eq, in, or exists`, id)
+      const sig = whenSig(r?.when)
+      if (seenWhen.has(sig)) err(`Decide "${id}" has two rules that match the same when`, id)
+      seenWhen.add(sig)
+    })
+  }
+
+  /* ---- globals + allowed_intents (VA.2) --------------------------------- */
+  const edgesById = new Map(doc.edges.filter((e) => e.id?.trim()).map((e) => [e.id.trim(), e]))
+  const globalListed = new Set()
+  const globalMatchers = new Set()
+  const seenGlobalMatcher = new Map()
+  for (const raw of doc.globals ?? []) {
+    const gid = (raw ?? '').trim()
+    if (!gid) continue
+    const e = edgesById.get(gid)
+    if (!e) {
+      err(`globals lists "${gid}" but that edge does not exist`)
+      continue
+    }
+    if ((e.kind ?? '') !== 'global')
+      err(`globals edge "${gid}" must be kind global`, gid)
+    const matcher = (e.intent ?? '').trim() || (e.option ?? '').trim()
+    if (!matcher) err(`global edge "${gid}" needs an intent or option`, gid)
+    else {
+      const key = matcher.toLowerCase()
+      if (seenGlobalMatcher.has(key))
+        err(`duplicate global matcher "${matcher}" on "${gid}"`, gid)
+      seenGlobalMatcher.set(key, gid)
+      globalMatchers.add(key)
+    }
+    globalListed.add(gid)
+  }
   for (const e of doc.edges) {
-    if ((e.kind ?? '') === 'global')
-      warn(
-        `edge "${e.id}" is kind "global", which the runtime never offers — only option/intent edges leaving the current node are selectable`,
-        e.id,
-      )
+    if ((e.kind ?? '') === 'global' && !globalListed.has(e.id))
+      warn('This global is not listed on the flow — the bot will never offer it.', e.id)
     if ((e.kind ?? '') === 'tool_result')
       warn(`edge "${e.id}" is kind "tool_result", which nothing in the runtime consumes`, e.id)
+  }
+  const LISTEN_FOR_INTENTS = new Set(['ListenChoice', 'ListenLanguage', 'ListenSlot'])
+  for (const n of doc.nodes) {
+    const id = n.id?.trim()
+    if (!id) continue
+    for (const gi of n.global_intents ?? []) {
+      const m = (gi ?? '').trim().toLowerCase()
+      if (!m) continue
+      if (!globalMatchers.has(m))
+        err(
+          `node "${id}" global_intents "${gi}" has no matching global on the flow`,
+          id,
+        )
+    }
+    const allowed = n.allowed_intents ?? []
+    if (!allowed.length) continue
+    if (!LISTEN_FOR_INTENTS.has(n.type))
+      err(`allowed_intents is only valid on ListenChoice, ListenLanguage, or ListenSlot`, id)
+    const seenA = new Set()
+    for (const raw of allowed) {
+      const a = (raw ?? '').trim().toLowerCase()
+      if (!a) {
+        err(`node "${id}" has a blank allowed_intents entry`, id)
+        continue
+      }
+      if (seenA.has(a)) err(`node "${id}" lists allowed_intents "${raw}" twice`, id)
+      seenA.add(a)
+    }
+    for (const g of n.global_intents ?? []) {
+      const gm = (g ?? '').trim().toLowerCase()
+      if (gm && seenA.has(gm))
+        err(
+          `node "${id}" lists "${g}" in both allowed_intents and global_intents — globals belong in global_intents only`,
+          id,
+        )
+    }
   }
 
   /* ---- matrix ---- */
