@@ -51,6 +51,29 @@ export default function Settings() {
       setBusy(false)
     }
   }
+  /** No DELETE for settings — emptying the value is the supported way to clear one. */
+  const clearSetting = async (k) => {
+    if (k === 'answer_pins') {
+      alert(
+        'answer_pins is managed by the Answer pins screen. Clearing it here would break call answering.',
+      )
+      return
+    }
+    if (
+      !confirm(`Clear the value of "${k}"?
+
+The key stays in the table with an empty value — the API has no delete for settings.`)
+    )
+      return
+    try {
+      await api.putSetting(k, '')
+      toast.ok(`Cleared ${k}`)
+      await settings.reload()
+    } catch (e) {
+      toast.fail(e, 'Clear setting')
+    }
+  }
+
   const upload = async () => {
     const f = fileRef.current?.files?.[0]
     if (!scenario || !f) {

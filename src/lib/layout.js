@@ -3,16 +3,19 @@
  *
  * coral.flow.v1 carries no node coordinates, so a freshly loaded flow has to be
  * placed somewhere sensible. We do a layered (Sugiyama-ish) pass: BFS depth from
- * the Entry node gives the column, order within a column gives the row. Good
- * enough to read a 19-node/65-edge desk flow at a glance, with no extra dep.
+ * the Entry node gives the ROW, and order within that depth spreads across the
+ * row. Good enough to read a 19-node/65-edge desk flow at a glance, no extra dep.
+ *
+ * Vertical: a conversation reads top-to-bottom, which matches how the flowcharts
+ * in docs/06 are drawn and keeps deep flows inside the viewport width.
  *
  * Once placed, positions are persisted into doc.cx.layout — `cx` is declared in
  * the Go Document but never read by the runtime, so it round-trips through draft
  * save and publish without affecting validation or behaviour.
  */
 
-const COL_W = 235
-const ROW_H = 104
+const COL_W = 240 // horizontal gap between siblings at the same depth
+const ROW_H = 150 // vertical gap between depths
 const PAD_X = 60
 const PAD_Y = 60
 export function autoLayout(doc) {
@@ -42,21 +45,21 @@ export function autoLayout(doc) {
   // Anything unreachable is parked in a trailing column so it stays visible.
   const maxDepth = Math.max(0, ...depth.values())
   for (const id of ids) if (!depth.has(id)) depth.set(id, maxDepth + 1)
-  const byCol = new Map()
+  const byDepth = new Map()
   for (const id of ids) {
     const d = depth.get(id) ?? 0
-    if (!byCol.has(d)) byCol.set(d, [])
-    byCol.get(d).push(id)
+    if (!byDepth.has(d)) byDepth.set(d, [])
+    byDepth.get(d).push(id)
   }
   const pos = {}
-  const tallest = Math.max(...[...byCol.values()].map((c) => c.length))
-  for (const [col, members] of byCol) {
-    // Vertically centre each column so the graph reads along a spine.
-    const offset = ((tallest - members.length) * ROW_H) / 2
-    members.forEach((id, row) => {
-      pos[id] = {
-        x: PAD_X + col * COL_W,
-        y: PAD_Y + offset + row * ROW_H,
+  const widest = Math.max(...[...byDepth.values()].map((c) => c.length))
+  for (const [d, members] of byDepth) {
+    // Centre each depth horizontally so the graph reads down a spine.
+    const offset = ((widest - members.length) * COL_W) / 2
+    members.forEach((i, idx) => {
+      pos[i] = {
+        x: PAD_X + offset + idx * COL_W,
+        y: PAD_Y + d * ROW_H,
       }
     })
   }
@@ -84,11 +87,16 @@ export function resolveLayout(doc) {
 }
 export function withLayout(doc, layout) {
   const rounded = {}
-  for (const [id, p] of Object.entries(layout))
+  // Only nodes that still exist — deleted and renamed ids otherwise pile up in
+  // cx.layout forever, one stale entry per edit.
+  const live = new Set(doc.nodes.map((n) => n.id))
+  for (const [id, p] of Object.entries(layout)) {
+    if (!live.has(id)) continue
     rounded[id] = {
       x: Math.round(p.x),
       y: Math.round(p.y),
     }
+  }
   return {
     ...doc,
     cx: {

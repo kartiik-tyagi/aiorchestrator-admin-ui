@@ -55,6 +55,34 @@ export default function Engines() {
       setSaving(false)
     }
   }
+  const removeCred = async (gatewayId) => {
+    const bound = [listen, think, speak].includes(gatewayId)
+    if (
+      !confirm(
+        `Delete the stored key for "${gatewayId}"?
+
+` +
+          `The key is write-only — it cannot be read back, so this is permanent unless you have ` +
+          `it elsewhere.` +
+          (bound
+            ? `
+
+WARNING: ${gatewayId} is currently a bound engine. Calls will fail on auth ` +
+              `until you add a key or switch that engine.`
+            : ''),
+      )
+    )
+      return
+    try {
+      await api.deleteCredential(gatewayId)
+      toast.ok(`Deleted credential for ${gatewayId}`)
+      await creds.reload()
+      void reloadStatus()
+    } catch (e) {
+      toast.fail(e, 'Delete credential')
+    }
+  }
+
   const saveCred = async () => {
     if (!credGw || !credKey.trim()) {
       toast.push('err', 'Pick a gateway and paste a key')
@@ -159,6 +187,7 @@ export default function Engines() {
                 <th>Key set</th>
                 <th>Preview</th>
                 <th>Updated</th>
+                <th />
               </tr>
             </thead>
             <tbody>

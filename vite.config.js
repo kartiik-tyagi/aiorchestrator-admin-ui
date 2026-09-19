@@ -6,6 +6,7 @@ const ORCH = process.env.ORCH_URL ?? 'http://127.0.0.1:8011'
 export default defineConfig({
   plugins: [react()],
   server: {
+    host: true,
     port: 5183,
     proxy: {
       // Same-origin in the browser, so no CORS work is needed server-side.

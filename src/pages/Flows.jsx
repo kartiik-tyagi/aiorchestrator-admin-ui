@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { api, getTenant } from '../api/client'
-import { Card, Empty, SelectField, TextField, useAsync, useToast } from '../components/ui'
+import { Card, Empty, Modal, SelectField, TextField, useAsync, useToast } from '../components/ui'
 import { FLOW_SCHEMA_ID } from '../api/types'
 
 /** A minimal but *valid* starting graph, so a new flow can be published immediately. */
@@ -52,10 +52,53 @@ export default function Flows() {
   const toast = useToast()
   const nav = useNavigate()
   const list = useAsync(() => api.listFlows(), [])
+  const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
   const [id, setId] = useState('')
   const [name, setName] = useState('')
   const [direction, setDirection] = useState('inbound')
   const [busy, setBusy] = useState(false)
+
+  const openCreate = () => {
+    setId('')
+    setName('')
+    setDirection('inbound')
+    setCreating(true)
+  }
+
+  const all = list.data?.flows ?? []
+  const needle = q.trim().toLowerCase()
+  const shown = needle
+    ? all.filter(
+        (f) => f.id.toLowerCase().includes(needle) || (f.name ?? '').toLowerCase().includes(needle),
+      )
+    : all
+  const removeFlow = async (f) => {
+    const published = (f.current_version ?? 0) > 0
+    if (
+      !confirm(
+        `Delete flow "${f.id}"?
+
+` +
+          (published
+            ? `This removes its draft and all ${f.current_version} published version(s). `
+            : 'This removes its draft. ') +
+          `Sessions that ran it are kept. The server refuses if an answer pin points at it.`,
+      )
+    )
+      return
+    setBusy(true)
+    try {
+      await api.deleteFlow(f.id)
+      toast.ok(`Deleted ${f.id}`)
+      await list.reload()
+    } catch (e) {
+      toast.fail(e, 'Delete flow')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const create = async () => {
     const fid = id.trim()
     if (!fid) {
@@ -72,6 +115,7 @@ export default function Flows() {
         doc: scaffold(),
       })
       toast.ok(`Created ${fid} with a valid starter graph`)
+      setCreating(false)
       setId('')
       setName('')
       await list.reload()
@@ -84,23 +128,43 @@ export default function Flows() {
   }
   return (
     <div className="content">
-      <div className="page-head">
-        <h1>Flows</h1>
-        <p>
-          A flow is the conversation graph — the law the bot follows. Drafts are mutable; published
-          versions are immutable and content-hashed, and only a published version can be pinned to
-          answer calls.
-        </p>
-      </div>
-
-      <Card
-        title="Flows"
-        actions={
+      <div className="page-head has-actions">
+        <div className="head-text">
+          <h1>Flows</h1>
+          <p>
+            A flow is the conversation graph — the law the bot follows. Drafts are mutable;
+            published versions are immutable and content-hashed, and only a published version can be
+            pinned to answer calls.
+          </p>
+        </div>
+        <div className="page-actions">
           <button className="btn secondary" onClick={() => void list.reload()}>
             Reload
           </button>
-        }
-      >
+          <button className="btn" onClick={openCreate}>
+            New flow
+          </button>
+        </div>
+      </div>
+
+      {/* No card title — the page heading already says Flows. */}
+      <Card>
+        {all.length > 3 && (
+          <div className="card-toolbar">
+            <input
+              type="search"
+              value={q}
+              placeholder="Filter by id or name…"
+              onChange={(e) => setQ(e.target.value)}
+              aria-label="Filter flows"
+            />
+            <span className="list-count">
+              {shown.length === all.length
+                ? `${all.length} flows`
+                : `${shown.length} of ${all.length}`}
+            </span>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="data">
             <thead>
@@ -109,18 +173,16 @@ export default function Flows() {
                 <th>Name</th>
                 <th>Direction</th>
                 <th>Status</th>
-                <th>Published version</th>
+                <th>Version</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {(list.data?.flows ?? []).map((f) => (
+              {shown.map((f) => (
                 <tr key={f.id}>
-                  <td>
-                    <code>{f.id}</code>
-                  </td>
-                  <td>{f.name || '—'}</td>
-                  <td>{f.direction || '—'}</td>
+                  <td className="cell-id">{f.id}</td>
+                  <td>{f.name || <span className="cell-dim">—</span>}</td>
+                  <td className="cell-dim">{f.direction || '—'}</td>
                   <td>
                     {f.status === 'published' ? (
                       <span className="badge ok">published</span>
@@ -128,59 +190,75 @@ export default function Flows() {
                       <span className="badge warn">{f.status || 'draft'}</span>
                     )}
                   </td>
-                  <td>{f.current_version ?? '—'}</td>
-                  <td
-                    style={{
-                      textAlign: 'right',
-                    }}
-                  >
+                  <td>
+                    {f.current_version ? (
+                      <span className="mono">v{f.current_version}</span>
+                    ) : (
+                      <span className="cell-dim">never published</span>
+                    )}
+                  </td>
+                  <td className="row-actions">
                     <Link
                       className="btn sm secondary"
                       to={`/flows/${encodeURIComponent(f.id)}/builder`}
                     >
                       Open builder
-                    </Link>
+                    </Link>{' '}
+                    <button
+                      className="btn danger sm"
+                      onClick={() => void removeFlow(f)}
+                      disabled={busy}
+                      title="Delete this flow, its draft and all published versions"
+                    >
+                      Delete
+                    </button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        {!list.data?.flows?.length && <Empty>No flows yet — create one below.</Empty>}
+        {!all.length && <Empty>No flows yet — use “New flow” to create one.</Empty>}
+        {!!all.length && !shown.length && <Empty>No flow matches “{q}”.</Empty>}
       </Card>
 
-      <Card
-        title="Create flow"
-        hint="New flows start from a minimal valid graph (Entry → Speak → End) so you can publish immediately and edit from there."
-        actions={
-          <button className="btn" onClick={create} disabled={busy}>
-            Create &amp; open builder
-          </button>
-        }
+      <Modal
+        open={creating}
+        title="New flow"
+        hint="Starts from a minimal valid graph (Entry → Speak → End) so you can publish immediately and edit from there."
+        onClose={() => setCreating(false)}
+        onSubmit={create}
+        submitLabel="Create & open builder"
+        busy={busy}
       >
-        <div className="row">
-          <TextField
-            label="Flow id"
-            value={id}
-            onChange={setId}
-            placeholder="coral-inbound-triage"
-            mono
-          />
-          <TextField
-            label="Name"
-            value={name}
-            onChange={setName}
-            placeholder="Coral inbound triage"
-          />
-          <SelectField
-            label="Direction"
-            value={direction}
-            onChange={setDirection}
-            options={['inbound', 'outbound']}
-            allowEmpty={false}
-          />
-        </div>
-      </Card>
+        <TextField
+          label="Flow id"
+          value={id}
+          onChange={setId}
+          placeholder="coral-inbound-triage"
+          mono
+          desc="Permanent. Sessions and answer pins reference the flow by this id."
+        />
+        <TextField
+          label="Name"
+          value={name}
+          onChange={setName}
+          placeholder="Coral inbound triage"
+          desc="Shown in listings. Defaults to the id."
+        />
+        <SelectField
+          label="Direction"
+          value={direction}
+          onChange={setDirection}
+          options={['inbound', 'outbound']}
+          allowEmpty={false}
+        />
+        <p className="inline-note">
+          <strong>Created one wrongly?</strong> Delete it from the table. Its draft and every
+          published version go with it. The server refuses while an answer pin still points at the
+          flow, so unpin it first.
+        </p>
+      </Modal>
     </div>
   )
 }

@@ -5,6 +5,8 @@ import {
   Card,
   Empty,
   Field,
+  markHue,
+  Modal,
   SelectField,
   StringList,
   TextField,
@@ -26,19 +28,36 @@ export default function Bindings() {
   const [id, setId] = useState('')
   const [name, setName] = useState('')
   const [kind, setKind] = useState('knowledge')
-  const [status, setStatus] = useState('active')
+  const [status, setStatusField] = useState('active')
   const [mode, setMode] = useState('inline_faq')
   const [entries, setEntries] = useState([])
   const [gatewayId, setGatewayId] = useState('')
   const [path, setPath] = useState('')
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [creating, setCreating] = useState(false)
+  const [newId, setNewId] = useState('')
+  const [newName, setNewName] = useState('')
+  const [newKind, setNewKind] = useState('knowledge')
+  const [newMode, setNewMode] = useState('inline_faq')
+  const [q, setQ] = useState('')
   const locales = catalog?.tts_locales_v1 ?? ['en-IN']
+
+  const allBindings = list.data?.bindings ?? []
+  const bNeedle = q.trim().toLowerCase()
+  const shownBindings = bNeedle
+    ? allBindings.filter(
+        (b) =>
+          b.id.toLowerCase().includes(bNeedle) ||
+          (b.name ?? '').toLowerCase().includes(bNeedle) ||
+          (b.kind ?? '').toLowerCase().includes(bNeedle),
+      )
+    : allBindings
   const load = useCallback((b) => {
     setId(b.id)
     setName(b.name ?? '')
     setKind(b.kind)
-    setStatus(b.status)
+    setStatusField(b.status)
     const cfg = b.config ?? {}
     setMode(cfg.mode ?? 'inline_faq')
     setEntries(Array.isArray(cfg.entries) ? cfg.entries : [])
@@ -50,13 +69,129 @@ export default function Bindings() {
     setId('')
     setName('')
     setKind('knowledge')
-    setStatus('active')
+    setStatusField('active')
     setMode('inline_faq')
     setEntries([])
     setGatewayId('')
     setPath('')
     setDirty(false)
   }
+  const openCreate = () => {
+    setNewId('')
+    setNewName('')
+    setNewKind('knowledge')
+    setNewMode('inline_faq')
+    setCreating(true)
+  }
+
+  /**
+   * Creates the binding straight away with an empty config, then hands it to the
+   * editor to fill in.
+   *
+   * PUT is create-or-update, so an id that already exists would silently
+   * overwrite a live binding — including its entries. That is worth one
+   * confirmation, since Inform nodes read this the moment it is saved.
+   */
+  const createBinding = async () => {
+    const bid = newId.trim()
+    if (!bid) {
+      toast.push('err', 'Binding id required')
+      return
+    }
+    const existing = list.data?.bindings?.find((b) => b.id === bid)
+    if (
+      existing &&
+      !confirm(
+        `"${bid}" already exists (${existing.kind}/${existing.status}).\n\n` +
+          `Saving over it replaces its config, including any entries. Open it from the list ` +
+          `instead if you meant to edit it.`,
+      )
+    )
+      return
+
+    const config = newKind === 'knowledge' ? { mode: newMode, entries: [] } : {}
+    setBusy(true)
+    try {
+      const got = await api.putBinding(bid, {
+        tenant_id: getTenant(),
+        kind: newKind,
+        name: newName.trim() || bid,
+        status: 'active',
+        config,
+      })
+      toast.ok(`Created ${got.id}`)
+      setCreating(false)
+      await list.reload()
+      load({
+        id: bid,
+        name: newName.trim() || bid,
+        kind: newKind,
+        status: 'active',
+        config,
+      })
+    } catch (e) {
+      toast.fail(e, 'Create binding')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /**
+   * The API has no DELETE for bindings, but the runtime honours status:
+   * internal/runtime/graph/inform.go:55 refuses any binding that is not "active".
+   * So disabling one genuinely stops it answering, and is reversible.
+   */
+  const setStatus = async (b, next) => {
+    const verb = next === 'disabled' ? 'Disable' : 'Enable'
+    if (
+      next === 'disabled' &&
+      !confirm(
+        `Disable "${b.id}"?
+
+Inform nodes using it will stop answering immediately. ` +
+          `The binding is kept and you can re-enable it at any time.`,
+      )
+    )
+      return
+    try {
+      await api.putBinding(b.id, {
+        tenant_id: b.tenant_id || getTenant(),
+        kind: b.kind,
+        name: b.name,
+        status: next,
+        config: b.config ?? {},
+      })
+      toast.ok(`${verb}d ${b.id}`)
+      if (id === b.id) setStatusField(next)
+      await list.reload()
+    } catch (e) {
+      toast.fail(e, `${verb} binding`)
+    }
+  }
+
+  const removeBinding = async (bid) => {
+    if (
+      !confirm(
+        `Delete binding "${bid}"?
+
+This is permanent. Disabling keeps it and is reversible. ` +
+          `The server refuses if a published flow still Informs from it.`,
+      )
+    )
+      return
+    setBusy(true)
+    try {
+      await api.deleteBinding(bid)
+      toast.ok(`Deleted ${bid}`)
+      reset()
+      await list.reload()
+    } catch (e) {
+      toast.fail(e, 'Delete binding')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const save = async () => {
     const bid = id.trim()
     if (!bid) {
@@ -109,39 +244,92 @@ export default function Bindings() {
   }
   return (
     <div className="content">
-      <div className="page-head">
-        <h1>Bindings</h1>
-        <p>
-          Knowledge and CRM sources referenced by <code>Inform</code> nodes. A flow may only use a
-          binding it declares in <code>binding_refs</code>, and the answer text is per locale.
-        </p>
+      <div className="page-head has-actions">
+        <div className="head-text">
+          <h1>Bindings</h1>
+          <p>
+            Knowledge and CRM sources referenced by <code>Inform</code> nodes. A flow may only use a
+            binding it declares in <code>binding_refs</code>, and the answer text is per locale.
+          </p>
+        </div>
+        <div className="page-actions">
+          <button className="btn secondary" onClick={() => void list.reload()}>
+            Reload
+          </button>
+          <button className="btn" onClick={openCreate}>
+            New binding
+          </button>
+        </div>
       </div>
 
       <div className="split">
         <div>
-          <div className="list">
-            {(list.data?.bindings ?? []).map((b) => (
-              <div
-                key={b.id}
-                className={`list-item ${id === b.id ? 'active' : ''}`}
-                onClick={() => load(b)}
-              >
-                <div className="mono">{b.id}</div>
-                <div className="sub">
-                  {b.kind} · {b.status}
-                  {Array.isArray(b.config?.entries) ? ` · ${b.config.entries.length} entries` : ''}
-                </div>
+          <div className="list cards">
+            {allBindings.length > 3 && (
+              <div className="list-head">
+                <input
+                  type="search"
+                  value={q}
+                  placeholder="Filter bindings…"
+                  onChange={(e) => setQ(e.target.value)}
+                  aria-label="Filter bindings"
+                />
+                <span className="list-count">
+                  {shownBindings.length}/{allBindings.length}
+                </span>
               </div>
-            ))}
-            {!list.data?.bindings?.length && <div className="empty">No bindings</div>}
-          </div>
-          <div className="actions">
-            <button className="btn secondary" onClick={reset}>
-              New binding
-            </button>
-            <button className="btn secondary" onClick={() => void list.reload()}>
-              Reload
-            </button>
+            )}
+            <div className="list-scroll">
+              {shownBindings.map((b) => {
+                const bMode = b.config?.mode ?? 'inline_faq'
+                const isFaq = b.kind === 'knowledge' && bMode === 'inline_faq'
+                const n = Array.isArray(b.config?.entries) ? b.config.entries.length : 0
+                return (
+                  <button
+                    type="button"
+                    key={b.id}
+                    className={`list-item ${id === b.id ? 'active' : ''} ${
+                      b.status === 'active' ? '' : 'muted'
+                    }`}
+                    onClick={() => load(b)}
+                  >
+                    <span className="li-mark" style={{ '--mark-h': markHue(b.id) }}>
+                      {b.id.trim().charAt(0)}
+                    </span>
+                    <span className="li-body">
+                      <span className="li-main">
+                        <span className="li-id">{b.id}</span>
+                        <span className="li-badges">
+                          {b.status !== 'active' && <span className="badge warn">disabled</span>}
+                          {/* An inline_faq with no entries matches nothing, so the
+                              Inform node fails closed to repair. Worth flagging. */}
+                          {isFaq &&
+                            (n === 0 ? (
+                              <span className="badge warn">empty</span>
+                            ) : (
+                              <span className="badge">{n}</span>
+                            ))}
+                        </span>
+                      </span>
+                      <span className="li-sub">
+                        {b.kind}
+                        {b.kind === 'knowledge' ? ` · ${bMode}` : ''}
+                      </span>
+                    </span>
+                  </button>
+                )
+              })}
+              {!allBindings.length && (
+                <div className="list-empty">
+                  No bindings yet.
+                  <br />
+                  Use “New binding” to add one.
+                </div>
+              )}
+              {!!allBindings.length && !shownBindings.length && (
+                <div className="list-empty">No binding matches “{q}”.</div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -154,6 +342,32 @@ export default function Bindings() {
                 <button className="btn" onClick={save} disabled={busy}>
                   {busy ? 'Saving…' : 'Save binding'}
                 </button>
+                {id && list.data?.bindings?.some((b) => b.id === id) && (
+                  <button
+                    className={status === 'active' ? 'btn danger' : 'btn secondary'}
+                    onClick={() => {
+                      const b = list.data.bindings.find((x) => x.id === id)
+                      void setStatus(b, status === 'active' ? 'disabled' : 'active')
+                    }}
+                    title={
+                      status === 'active'
+                        ? 'Stop this binding answering. Reversible.'
+                        : 'Allow Inform nodes to use this binding again.'
+                    }
+                  >
+                    {status === 'active' ? 'Disable' : 'Enable'}
+                  </button>
+                )}
+                {id && list.data?.bindings?.some((b) => b.id === id) && (
+                  <button
+                    className="btn danger"
+                    onClick={() => void removeBinding(id)}
+                    disabled={busy}
+                    title="Delete permanently. Disabling is usually safer."
+                  >
+                    Delete
+                  </button>
+                )}
                 {dirty && <span className="badge warn">unsaved changes</span>}
               </>
             }
@@ -193,7 +407,7 @@ export default function Bindings() {
                 label="Status"
                 value={status}
                 onChange={(v) => {
-                  setStatus(v)
+                  setStatusField(v)
                   setDirty(true)
                 }}
                 options={catalog?.binding_statuses ?? ['active', 'disabled']}
@@ -350,6 +564,61 @@ export default function Bindings() {
           )}
         </div>
       </div>
+
+      <Modal
+        open={creating}
+        title="New binding"
+        hint="Created active with an empty config. Add FAQ entries in the editor and press Save binding."
+        onClose={() => setCreating(false)}
+        onSubmit={createBinding}
+        busy={busy}
+      >
+        <TextField
+          label="Binding id"
+          value={newId}
+          onChange={setNewId}
+          placeholder="product-faq"
+          mono
+          desc="Inform nodes reference this id, and the flow must list it in binding_refs."
+        />
+        <TextField
+          label="Name"
+          value={newName}
+          onChange={setNewName}
+          placeholder="Coral product FAQ"
+          desc="Shown in listings. Defaults to the id."
+        />
+        <div className="row">
+          <SelectField
+            label="Kind"
+            value={newKind}
+            onChange={setNewKind}
+            options={catalog?.binding_kinds ?? ['knowledge', 'crm']}
+            allowEmpty={false}
+          />
+          {newKind === 'knowledge' && (
+            <SelectField
+              label="Knowledge mode"
+              value={newMode}
+              onChange={setNewMode}
+              options={catalog?.knowledge_modes ?? ['inline_faq', 'http_retrieve']}
+              allowEmpty={false}
+            />
+          )}
+        </div>
+        {newKind === 'knowledge' && newMode === 'http_retrieve' && (
+          <p className="inline-note">
+            <strong>Not served yet.</strong> The kernel accepts <code>http_retrieve</code> at
+            publish but fails closed at runtime — <code>inform.go</code> returns an error rather
+            than calling out, so the Inform node takes its repair edge. Use <code>inline_faq</code>{' '}
+            for anything that has to answer a live caller.
+          </p>
+        )}
+        <p className="inline-note">
+          Never put an <code>api_key</code> in a binding config — the server rejects it. Vendor keys
+          belong in Engines → credentials.
+        </p>
+      </Modal>
     </div>
   )
 }

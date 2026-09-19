@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCatalog } from '../api/catalog'
 import { api } from '../api/client'
-import { Card, Empty, useAsync, useToast } from '../components/ui'
+import { Card, describeError, Empty, useAsync, useToast } from '../components/ui'
 /**
  * Answer pins tie a profile to a published flow version. Without one, a live or
  * chat session create is refused with 422 flow_pin_required — this is the switch
@@ -20,6 +20,8 @@ export default function Pins() {
   const [rows, setRows] = useState([])
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
+  const [testing, setTesting] = useState('')
+  const [testResult, setTestResult] = useState(null)
   useEffect(() => {
     if (pins.data) {
       setRows(pins.data.pins ?? [])
@@ -54,9 +56,54 @@ export default function Pins() {
       setBusy(false)
     }
   }
+  /**
+   * Proves the whole chain in one click: engines → profile → flow → pin.
+   * clock=chat runs the same graph and turn machine as a real call, minus STT/TTS,
+   * so a greeting coming back means the configuration genuinely works.
+   */
+  const testPin = async (pin) => {
+    const key = `${pin.profile_id}|${pin.flow_id}`
+    setTesting(key)
+    setTestResult(null)
+    let sessionId = ''
+    try {
+      const created = await api.createSession({
+        profile_id: pin.profile_id,
+        profile_version: 'latest',
+        flow_id: pin.flow_id,
+        flow_version: pin.flow_version || 'latest',
+        clock: 'chat',
+        caller: { ani: 'admin-ui-smoke' },
+      })
+      sessionId = created.session_id
+      const ans = await api.answerSession(sessionId)
+      const spoken = (ans.spoken || '').trim()
+      setTestResult({
+        key,
+        ok: !!spoken,
+        sessionId,
+        text:
+          spoken ||
+          'Session answered but the bot said nothing — check the Entry node has a Speak next to it.',
+      })
+      toast.ok(`Smoke test passed for ${pin.profile_id}`)
+    } catch (e) {
+      setTestResult({ key, ok: false, sessionId, text: describeError(e) })
+      toast.fail(e, 'Smoke test')
+    } finally {
+      // Chat sessions are durable; close it so the list stays tidy.
+      if (sessionId) await api.stopSession(sessionId).catch(() => {})
+      setTesting('')
+    }
+  }
+
   const flowIds = (flows.data?.flows ?? []).map((f) => f.id)
   const profileIds = (profiles.data?.profiles ?? []).map((p) => p.id)
-  const publishedVersion = (fid) => flows.data?.flows?.find((f) => f.id === fid)?.current_version
+  // 0 means the flow exists but was never published, so it cannot answer.
+  const publishedVersion = (fid) => {
+    const v = flows.data?.flows?.find((f) => f.id === fid)?.current_version
+    return v && v > 0 ? v : null
+  }
   return (
     <div className="content">
       <div className="page-head">
@@ -210,6 +257,14 @@ export default function Pins() {
               )}
               <div className="actions tight">
                 <button
+                  className="btn sm"
+                  disabled={!r.profile_id || !r.flow_id || dirty || testing !== ''}
+                  title={dirty ? 'Save pins before testing' : 'Run a chat session against this pin'}
+                  onClick={() => void testPin(r)}
+                >
+                  {testing === `${r.profile_id}|${r.flow_id}` ? 'Testing…' : 'Test this pin'}
+                </button>
+                <button
                   className="btn danger sm"
                   onClick={() => {
                     setRows((xs) => xs.filter((_, n) => n !== i))
@@ -219,6 +274,17 @@ export default function Pins() {
                   Remove pin
                 </button>
               </div>
+              {testResult?.key === `${r.profile_id}|${r.flow_id}` && (
+                <div className={`probe ${testResult.ok ? 'ok' : 'err'}`}>
+                  {testResult.ok ? 'Bot said: ' : ''}
+                  {testResult.text}
+                  {testResult.sessionId && (
+                    <div style={{ color: 'var(--dim)', marginTop: 4 }}>
+                      session {testResult.sessionId}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}

@@ -22,19 +22,52 @@ The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http
 Nine domains, all through the Control API. Configuration lives in Postgres — migrations create schema
 only and never insert data, so a fresh database is empty until something writes to it.
 
-| Screen | Domain | Endpoints |
+The sidebar is ordered as the configuration order — work top to bottom. A hidden walkthrough for a
+blank database lives at **`/tutorial`**; it is reachable by typing the URL only, and is deliberately
+not linked from the sidebar or any component. The order is defined once in `src/lib/setupSteps.js`,
+which the sidebar and the dashboard checklist both read.
+
+| # | Screen | Domain | Endpoints |
 |---|---|---|
-| Dashboard | health, readiness, blockers | `/v1/health`, `/v1/platform/status`, `/v1/gateways`, `/v1/meta/catalog` |
-| Engines & credentials | which gateway serves listen/think/speak; vendor API keys | `/v1/tenant/engines`, `/v1/tenant/credentials*` |
-| Answer pins | profile → published flow version (+ DID) | `/v1/tenant/answer-pins` |
-| Profiles | the bot identity document, immutable versions | `/v1/profiles`, `/v1/profiles/{id}/versions` |
-| Flows | flow registry | `/v1/flows`, `/v1/flows/{id}` |
-| Flow builder | the `coral.flow.v1` graph: draft, publish, version inspect | `/v1/flows/{id}/draft`, `/v1/flows/{id}/versions` |
-| Bindings | knowledge/CRM sources for `Inform` nodes | `/v1/bindings*` |
-| Settings & fallback | tenant key/value; failure WAV prompts | `/v1/tenant/settings*`, `/v1/tenant/fallback*` |
+| — | Dashboard | health, setup checklist | `/v1/health`, `/v1/platform/status`, `/v1/gateways`, `/v1/meta/catalog` |
+| 1 | Engines & credentials | which gateway serves listen/think/speak; vendor API keys | `/v1/tenant/engines`, `/v1/tenant/credentials*` |
+| 2 | Profiles | the bot identity document, immutable versions | `/v1/profiles`, `/v1/profiles/{id}/versions` |
+| 3 | Bindings | knowledge/CRM sources for `Inform` nodes (optional) | `/v1/bindings*` |
+| 4 | Flows + builder | the `coral.flow.v1` graph: draft, publish, version inspect | `/v1/flows*` |
+| 5 | Answer pins | profile → published flow version (+ DID), plus a chat smoke test | `/v1/tenant/answer-pins`, `/v1/sessions*` |
+| 6 | Settings & fallback | tenant key/value; failure WAV prompts (optional) | `/v1/tenant/settings*`, `/v1/tenant/fallback*` |
 
 **A call is answerable when:** engines are bound → a profile is published → a flow is published → a pin
 ties them together. The dashboard shows exactly which of those is missing.
+
+### ⚠️ `ready_for_sessions` is not what it sounds like
+
+`GET /v1/platform/status` computes readiness from the database, the engine binding, the gateway
+registry, and whether **at least one profile row exists** (`internal/control/ui.go`). It does not
+check that the profile has a published *version*, that any flow exists or is published, or that an
+answer pin points at them. So the server reports `ready` while every call is still refused with
+`422 flow_pin_required`. The dashboard's own checklist (`src/lib/setupSteps.js`) applies the stricter
+test and is the one to trust. Note also that an unpublished flow reports `current_version: 0`, not
+`null` — checking for null counts drafts as published.
+
+### Deleting configuration
+
+Four `DELETE` endpoints were added to the orchestrator's Go backend to support this console
+(`internal/control/delete.go`, `internal/store/store_delete.go`):
+
+| Endpoint | Guards |
+|---|---|
+| `DELETE /v1/profiles/{id}` | 409 if an answer pin references it, or if any session used it |
+| `DELETE /v1/flows/{id}` | 409 if an answer pin references it; draft + versions cascade |
+| `DELETE /v1/bindings/{id}` | 409 if a published flow Informs from it |
+| `DELETE /v1/tenant/credentials/{gateway_id}` | none — keys have no dependents |
+
+All return `204 No Content` on success and `404` for an unknown id. **Deleting configuration never
+touches evidence** — sessions, transcripts and audit rows are always left alone, which is exactly
+why a profile that has answered calls cannot be removed.
+
+Bindings also support a reversible soft delete: set `status: disabled` and
+`internal/runtime/graph/inform.go:55` stops serving it, without losing the content.
 
 ### ⚠️ `api/openapi.yaml` in the orchestrator repo is stale
 
@@ -58,6 +91,46 @@ These come from the orchestrator's own locked docs — worth knowing before chan
    the Go validators so problems surface before publishing, but the server always re-validates. Keep
    them in sync with `internal/flow/validate.go` and `internal/profile/validate.go`.
 4. **Secrets are write-only.** Credentials show `api_key_set` plus a masked preview, never the key.
+
+### Keyboard and layout
+
+| Key | Does |
+|---|---|
+| `Ctrl`/`Cmd` + `B` | Collapse or expand the sidebar (persists in `localStorage`) |
+| `Ctrl`/`Cmd` + `Alt` + `B` | Builder: hide or show the right-hand panel (persists) |
+| `Del` / `Backspace` | Delete the selected node or edge |
+| `Esc` | Leave the focused inspector field; press again to deselect |
+| `Shift` + click a node | Connect from the selected node (or the selected edge's source) — click several in a row to fan out |
+| `Ctrl` + `Z` / `Ctrl` + `Shift` + `Z` | Undo / redo — 50 steps, covers every edit including node moves; rapid typing folds into one step |
+| `Ctrl` + `S` | Save draft (works while typing too) |
+
+Other shortcuts are suppressed while focus is in an input, textarea or dropdown.
+
+**Wiring the graph.** Drag a palette block onto the canvas to place it, or click it to add below the
+selected node. Drag from a node's bottom dot and drop anywhere on another node's card. A new edge's
+kind is guessed from its source — `intent` out of a Listen node, `next` out of Entry/Speak/Inform,
+`repair` for an Inform's second edge — and the intent box takes focus so you can type straight away.
+Click an edge label to select that edge; select a node to highlight its edges and fade the rest.
+Parallel edges between the same two nodes fan apart with stacked labels.
+
+**Clean vs Detailed lines.** The toggle at the canvas's top right sets how edges draw. *Clean* (the
+default) keeps every line faint and unlabelled until you hover or select a node, then shows only that
+node's connections — blue leaving it, green arriving. *Detailed* draws every line and label.
+
+**Connections panel.** Selecting a node lists what it *connects to* and what it is *connected from*,
+one row per edge: kind, intent, and the node at the other end. Click a row to edit it in place, click
+the other node's chip to jump to it, hover a row to highlight that line on the canvas. "Connect to a
+node…" is a searchable picker (type, ↑↓, Enter) with an optional kind override; the new edge opens with
+its intent focused, and Enter walks intent → option → back to the picker, so a whole fan-out can be
+wired from the keyboard without dragging a line.
+
+**The right-hand panel** folds to a rail (validation state, connection count, jump-to-section buttons),
+resizes by dragging its left edge (double-click resets), and every section in it collapses. Panel
+width, open/closed, line mode and each section's state are remembered per browser.
+
+The graph flows **top to bottom**:
+BFS depth from the Entry node sets the row, siblings spread across it, and handles sit on the top and
+bottom edges of each node.
 
 ### Canvas layout persistence
 
@@ -108,11 +181,13 @@ src/
     flowValidate.js     mirror of internal/flow/validate.go
     profileValidate.js  mirror of internal/profile/validate.go
     layout.js           BFS auto-layout for the canvas
+    flowGraph.js        edge-kind defaults, labels, ordering shared by canvas and panel
   components/ui.jsx     fields, sections, toasts, useAsync
   pages/
     Dashboard, Engines, Profiles, Flows, Bindings, Pins, Settings
     FlowBuilder.jsx     React Flow canvas
-    builder/            GraphNode, Inspector
+    builder/            GraphNode, FlowEdge, Inspector, Connections, NodePicker,
+                        PanelSection (collapsible, remembered), icons
 ```
 
 **Plain JavaScript — no TypeScript, no build-time type checking.** `src/api/types.js` keeps the

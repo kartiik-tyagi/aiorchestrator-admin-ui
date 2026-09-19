@@ -1,6 +1,15 @@
 import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { CatalogProvider, useCatalog } from './api/catalog'
+
+const SIDEBAR_KEY = 'orch_sidebar_collapsed'
+const readCollapsed = () => {
+  try {
+    return localStorage.getItem(SIDEBAR_KEY) === '1'
+  } catch {
+    return false
+  }
+}
 import { ToastProvider } from './components/ui'
 import { getTenant, getToken, setTenant, setToken } from './api/client'
 import Dashboard from './pages/Dashboard'
@@ -11,71 +20,67 @@ import FlowBuilder from './pages/FlowBuilder'
 import Bindings from './pages/Bindings'
 import Pins from './pages/Pins'
 import Settings from './pages/Settings'
-function Sidebar() {
+import Tutorial from './pages/Tutorial'
+import { SETUP_STEPS } from './lib/setupSteps'
+function Sidebar({ collapsed, onToggle }) {
   const { status } = useCatalog()
+  // Ordered so the sidebar reads top-to-bottom as the order you configure in.
   const nav = [
+    { section: 'Overview', links: [{ to: '/', label: 'Dashboard', end: true }] },
     {
-      section: 'Overview',
-      links: [
-        {
-          to: '/',
-          label: 'Dashboard',
-          end: true,
-        },
-      ],
+      section: 'Set up in this order',
+      links: SETUP_STEPS.filter((x) => x.n <= 5).map((x) => ({
+        to: x.to,
+        label: x.label,
+        num: x.n,
+        why: x.why,
+      })),
     },
     {
-      section: 'Runtime',
-      links: [
-        {
-          to: '/engines',
-          label: 'Engines & credentials',
-        },
-        {
-          to: '/pins',
-          label: 'Answer pins',
-        },
-      ],
-    },
-    {
-      section: 'Conversation',
-      links: [
-        {
-          to: '/profiles',
-          label: 'Profiles',
-        },
-        {
-          to: '/flows',
-          label: 'Flows',
-        },
-        {
-          to: '/bindings',
-          label: 'Bindings',
-        },
-      ],
-    },
-    {
-      section: 'Platform',
-      links: [
-        {
-          to: '/settings',
-          label: 'Settings & fallback',
-        },
-      ],
+      section: 'Optional',
+      links: SETUP_STEPS.filter((x) => x.n > 5).map((x) => ({
+        to: x.to,
+        label: x.label,
+        num: x.n,
+        why: x.why,
+      })),
     },
   ]
+
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`} aria-label="Main navigation">
       <div className="brand">
         <span className="brand-mark">C</span>
         <span>
           Orchestrator
           <span className="brand-sub">Admin console</span>
         </span>
+        {!collapsed && (
+          <button
+            className="side-toggle"
+            style={{ marginLeft: 'auto' }}
+            onClick={onToggle}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar (Ctrl+B)"
+          >
+            ‹
+          </button>
+        )}
       </div>
+      {collapsed && (
+        <button
+          className="side-toggle"
+          style={{ margin: '0 auto 0.6rem' }}
+          onClick={onToggle}
+          aria-label="Expand sidebar"
+          title="Expand sidebar (Ctrl+B)"
+        >
+          ›
+        </button>
+      )}
 
       {nav.map((g) => (
-        <div key={g.section}>
+        <div key={g.section} className="nav-group">
           <div className="nav-section">{g.section}</div>
           {g.links.map((l) => (
             <NavLink
@@ -83,19 +88,17 @@ function Sidebar() {
               to={l.to}
               end={'end' in l ? l.end : false}
               className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+              // Collapsed rail has no labels, so the tooltip carries the meaning.
+              title={collapsed ? `${l.num ? l.num + '. ' : ''}${l.label}` : l.why || undefined}
             >
-              {l.label}
+              {l.num != null && <span className="nav-num">{l.num}</span>}
+              <span className="nav-label">{l.label}</span>
             </NavLink>
           ))}
         </div>
       ))}
 
-      <div
-        style={{
-          marginTop: 'auto',
-          paddingTop: '1rem',
-        }}
-      >
+      <div className="side-foot">
         <div className="nav-section">Status</div>
         <div
           style={{
@@ -198,9 +201,40 @@ function TopBar() {
   )
 }
 function Shell() {
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+
+  const toggle = () =>
+    setCollapsed((v) => {
+      const next = !v
+      try {
+        localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0')
+      } catch {
+        /* private mode — the choice just will not persist */
+      }
+      return next
+    })
+
+  // Ctrl/Cmd+B is the near-universal binding for this, and works from anywhere
+  // except while typing into a field.
+  useEffect(() => {
+    const onKey = (e) => {
+      const t = e.target
+      const typing =
+        t instanceof HTMLElement &&
+        (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+      // Not with Alt: Ctrl+Alt+B is the flow builder's right-hand panel.
+      if (!typing && (e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        toggle()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   return (
     <div className="app">
-      <Sidebar />
+      <Sidebar collapsed={collapsed} onToggle={toggle} />
       <div className="main">
         <TopBar />
         <Routes>
@@ -212,6 +246,8 @@ function Shell() {
           <Route path="/bindings" element={<Bindings />} />
           <Route path="/pins" element={<Pins />} />
           <Route path="/settings" element={<Settings />} />
+          {/* Hidden: typed-URL only, deliberately absent from the sidebar. */}
+          <Route path="/tutorial" element={<Tutorial />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

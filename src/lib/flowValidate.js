@@ -96,6 +96,113 @@ export function validateFlow(doc, catalog) {
       err(`prompt "${ref}" has no text for the default locale ${doc.default_locale}`, n.id)
   }
 
+  /* ---- repair.unclear_prompt_ref: same rule, and nothing else checks it ----
+   *
+   * The kernel's publish validator walks node.prompt_ref only — node.repair
+   * stays raw JSON until a call parses it — so a dangling unclear_prompt_ref
+   * publishes clean and then throws `prompt_ref missing` inside repairLocked()
+   * on the first unclear reply, failing the turn and releasing the call. Catch
+   * it here, because the server will not.
+   */
+  for (const n of doc.nodes) {
+    const ref = (n.repair?.unclear_prompt_ref ?? '').trim()
+    if (!ref) continue
+    const locales = doc.prompts?.[ref]
+    if (!locales) {
+      err(
+        `node "${n.id}" repairs with prompt "${ref}" which is not defined — this publishes but fails the call on the first unclear reply`,
+        n.id,
+      )
+      continue
+    }
+    if (!locales[doc.default_locale]?.trim())
+      err(`repair prompt "${ref}" has no text for the default locale ${doc.default_locale}`, n.id)
+  }
+
+  /* ---- edge shape per node type -------------------------------------------
+   *
+   * None of this is in the Go publish validator — it lives in the cursor and
+   * only fires mid-call, where the failure mode is a released call rather than
+   * a 422. Every rule below maps to a specific error the runtime can raise:
+   *
+   *   soleNext()          "no next edge from node" / "ambiguous next edges"
+   *   soleRepair()        "no repair edge drawn for on_exhausted"
+   *   allowlistedLocked() empty allowlist → every reply classifies unclear
+   *
+   * Checked here because the operator can still fix it cheaply.
+   */
+  const outOf = (id) => doc.edges.filter((e) => e.from === id)
+  const countKind = (id, kind) => outOf(id).filter((e) => (e.kind ?? '') === kind).length
+  const LISTEN_TYPES = ['ListenChoice', 'ListenLanguage', 'ListenSlot']
+
+  for (const n of doc.nodes) {
+    const id = n.id?.trim()
+    if (!id) continue
+
+    // Entry / Speak / Inform auto-advance through exactly one `next`.
+    if (['Entry', 'Speak', 'Inform'].includes(n.type)) {
+      const nexts = countKind(id, 'next')
+      if (nexts === 0)
+        err(`${n.type} node "${id}" needs exactly one "next" edge — the call fails here`, id)
+      else if (nexts > 1)
+        err(`${n.type} node "${id}" has ${nexts} "next" edges; exactly one is legal`, id)
+    }
+
+    // An Inform that misses in the binding falls to its repair edge. No repair
+    // edge turns an ordinary FAQ miss into a released call.
+    if (n.type === 'Inform') {
+      const repairs = countKind(id, 'repair')
+      if (repairs === 0)
+        err(
+          `Inform node "${id}" needs one "repair" edge — without it any FAQ miss ends the call`,
+          id,
+        )
+      else if (repairs > 1)
+        err(`Inform node "${id}" has ${repairs} "repair" edges; exactly one is legal`, id)
+    }
+
+    if (LISTEN_TYPES.includes(n.type)) {
+      // The classifier only ever sees option/intent edges leaving this node.
+      const choices = outOf(id).filter((e) => ['option', 'intent'].includes(e.kind ?? '')).length
+      if (choices === 0)
+        err(
+          `${n.type} node "${id}" has no "option" or "intent" edge — every reply will be unclear`,
+          id,
+        )
+
+      // repair policy present ⇒ the exhaust path must be drawn.
+      const hasPolicy = n.repair && Object.keys(n.repair).length > 0
+      const repairs = countKind(id, 'repair')
+      if (hasPolicy && repairs === 0)
+        err(
+          `${n.type} node "${id}" sets a repair policy but has no "repair" edge — exhausting retries ends the call`,
+          id,
+        )
+      else if (repairs > 1)
+        err(`${n.type} node "${id}" has ${repairs} "repair" edges; exactly one is legal`, id)
+      else if (!hasPolicy && repairs === 0)
+        warn(
+          `${n.type} node "${id}" has no repair policy — an unclear reply leaves the bot silent`,
+          id,
+        )
+    }
+
+    // Declared in the schema, unimplemented in the cursor.
+    if (n.type === 'Decide')
+      err(`Decide nodes are not implemented — the call errors on reaching "${id}"`, id)
+  }
+
+  /* ---- edge kinds the runtime ignores ---- */
+  for (const e of doc.edges) {
+    if ((e.kind ?? '') === 'global')
+      warn(
+        `edge "${e.id}" is kind "global", which the runtime never offers — only option/intent edges leaving the current node are selectable`,
+        e.id,
+      )
+    if ((e.kind ?? '') === 'tool_result')
+      warn(`edge "${e.id}" is kind "tool_result", which nothing in the runtime consumes`, e.id)
+  }
+
   /* ---- matrix ---- */
   const matrixByIntent = new Map()
   ;(doc.matrix ?? []).forEach((row, i) => {

@@ -7,8 +7,11 @@ import {
   ChipMulti,
   Empty,
   Field,
+  markHue,
+  Modal,
   NumberField,
   SelectField,
+  SelectList,
   StringList,
   Section,
   TextField,
@@ -83,6 +86,8 @@ export default function Profiles() {
   const [rawErr, setRawErr] = useState('')
   const [newId, setNewId] = useState('')
   const [newName, setNewName] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [q, setQ] = useState('')
   const locales = catalog?.tts_locales_v1 ?? []
   const issues = useMemo(() => (doc ? validateProfile(doc, gateways) : []), [doc, gateways])
   const errors = issues.filter((i) => i.level === 'error')
@@ -163,6 +168,7 @@ export default function Profiles() {
         display_name: newName.trim(),
       })
       toast.ok(`Created ${id}`)
+      setCreating(false)
       setNewId('')
       setNewName('')
       await list.reload()
@@ -191,6 +197,34 @@ export default function Profiles() {
       setBusy(false)
     }
   }
+  const removeProfile = async () => {
+    if (!selected) return
+    if (
+      !confirm(
+        `Delete profile "${selected}"?
+
+This removes the profile and all its published ` +
+          `versions. Sessions that used it are kept. The server refuses if an answer pin still ` +
+          `points at it, or if any session references it.`,
+      )
+    )
+      return
+    setBusy(true)
+    try {
+      await api.deleteProfile(selected)
+      toast.ok(`Deleted ${selected}`)
+      setSelected('')
+      setDoc(null)
+      setVersion(null)
+      await list.reload()
+      void reloadStatus()
+    } catch (e) {
+      toast.fail(e, 'Delete profile')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const applyRaw = () => {
     try {
       const parsed = JSON.parse(rawText)
@@ -203,56 +237,96 @@ export default function Profiles() {
     }
   }
   const speakGw = doc?.routers?.speak?.providers?.[0] ?? ''
+  const allProfiles = list.data?.profiles ?? []
+  const pNeedle = q.trim().toLowerCase()
+  const shownProfiles = pNeedle
+    ? allProfiles.filter(
+        (p) =>
+          p.id.toLowerCase().includes(pNeedle) ||
+          (p.display_name ?? '').toLowerCase().includes(pNeedle),
+      )
+    : allProfiles
   return (
     <div className="content">
-      <div className="page-head">
-        <h1>Profiles</h1>
-        <p>
-          A profile is the bot's identity: which engines it routes to, what languages it speaks, its
-          voice, and how it renders speech. Versions are immutable — publishing always creates a new
-          one.
-        </p>
+      <div className="page-head has-actions">
+        <div className="head-text">
+          <h1>Profiles</h1>
+          <p>
+            A profile is the bot's identity: which engines it routes to, what languages it speaks,
+            its voice, and how it renders speech. Versions are immutable — publishing always creates
+            a new one.
+          </p>
+        </div>
+        <div className="page-actions">
+          <button className="btn secondary" onClick={() => void list.reload()}>
+            Reload
+          </button>
+          <button
+            className="btn"
+            onClick={() => {
+              setNewId('')
+              setNewName('')
+              setCreating(true)
+            }}
+          >
+            New profile
+          </button>
+        </div>
       </div>
 
       <div className="split">
         <div>
-          <div className="list">
-            {(list.data?.profiles ?? []).map((p) => (
-              <div
-                key={p.id}
-                className={`list-item ${selected === p.id ? 'active' : ''}`}
-                onClick={() => void loadProfile(p.id)}
-              >
-                <div className="mono">{p.id}</div>
-                <div className="sub">{p.display_name || 'no display name'}</div>
+          <div className="list cards">
+            {allProfiles.length > 3 && (
+              <div className="list-head">
+                <input
+                  type="search"
+                  value={q}
+                  placeholder="Filter profiles…"
+                  onChange={(e) => setQ(e.target.value)}
+                  aria-label="Filter profiles"
+                />
+                <span className="list-count">
+                  {shownProfiles.length}/{allProfiles.length}
+                </span>
               </div>
-            ))}
-            {!list.data?.profiles?.length && <div className="empty">No profiles yet</div>}
-          </div>
-
-          <Card title="Create profile">
-            <TextField
-              label="Profile id"
-              value={newId}
-              onChange={setNewId}
-              placeholder="coral-voice-desk"
-              mono
-            />
-            <TextField
-              label="Display name"
-              value={newName}
-              onChange={setNewName}
-              placeholder="Coral AI Voice Bot"
-            />
-            <div className="actions">
-              <button className="btn" onClick={createProfile} disabled={busy}>
-                Create
-              </button>
-              <button className="btn secondary" onClick={() => void list.reload()}>
-                Reload
-              </button>
+            )}
+            <div className="list-scroll">
+              {shownProfiles.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className={`list-item ${selected === p.id ? 'active' : ''}`}
+                  onClick={() => void loadProfile(p.id)}
+                >
+                  <span className="li-mark" style={{ '--mark-h': markHue(p.id) }}>
+                    {(p.display_name || p.id).trim().charAt(0)}
+                  </span>
+                  <span className="li-body">
+                    <span className="li-main">
+                      <span className="li-id">{p.id}</span>
+                      <span className="li-badges">
+                        {selected === p.id && version != null && (
+                          <span className="badge ok">v{version}</span>
+                        )}
+                      </span>
+                    </span>
+                    <span className="li-sub">{p.display_name || 'no display name'}</span>
+                  </span>
+                </button>
+              ))}
+              {!allProfiles.length && (
+                <div className="list-empty">
+                  No profiles yet.
+                  <br />
+                  Use “New profile” to add one.
+                </div>
+              )}
+              {!!allProfiles.length && !shownProfiles.length && (
+                <div className="list-empty">No profile matches “{q}”.</div>
+              )}
             </div>
-          </Card>
+          </div>
         </div>
 
         <div>
@@ -296,13 +370,21 @@ export default function Profiles() {
                   <button className="btn" onClick={publish} disabled={busy || errors.length > 0}>
                     {busy ? 'Publishing…' : 'Publish version'}
                   </button>
+                  <button
+                    className="btn danger"
+                    onClick={() => void removeProfile()}
+                    disabled={busy}
+                    title="Delete this profile and its versions"
+                  >
+                    Delete
+                  </button>
                 </div>
 
                 {!!issues.length && (
                   <div className="issues">
                     {issues.map((i, n) => (
-                      <div key={n} className={`issue ${i.level}`}>
-                        <span>{i.level === 'error' ? '✕' : '!'}</span>
+                      <div key={n} className={`issue ${i.level}`} style={{ cursor: 'default' }}>
+                        <span aria-hidden="true">{i.level === 'error' ? '✕' : '!'}</span>
                         <span>{i.message}</span>
                       </div>
                     ))}
@@ -555,19 +637,18 @@ export default function Profiles() {
                       publish fails with 422.
                     </p>
                     {['listen', 'think', 'speak', 'knowledge', 'translate'].map((port) => (
-                      <StringList
+                      <SelectList
                         key={port}
                         label={`routers.${port}.providers`}
                         values={doc.routers?.[port]?.providers ?? []}
-                        onChange={(v) =>
-                          patchIn('routers', {
-                            [port]: {
-                              providers: v,
-                            },
-                          })
+                        options={idsFor(port)}
+                        onChange={(v) => patchIn('routers', { [port]: { providers: v } })}
+                        emptyText={`— no ${port} gateway registered —`}
+                        desc={
+                          port === 'listen' || port === 'think' || port === 'speak'
+                            ? 'Required for the matching mode. First entry is used; the rest are fallbacks.'
+                            : undefined
                         }
-                        placeholder={idsFor(port)[0] ?? `${port} gateway id`}
-                        desc={`Registered: ${idsFor(port).join(', ') || 'none'}`}
                       />
                     ))}
                   </Section>
@@ -892,6 +973,37 @@ export default function Profiles() {
           )}
         </div>
       </div>
+
+      <Modal
+        open={creating}
+        title="New profile"
+        hint="Creates the registry row. The document editor opens next — nothing is published until you press Publish."
+        onClose={() => setCreating(false)}
+        onSubmit={createProfile}
+        busy={busy}
+      >
+        <TextField
+          label="Profile id"
+          value={newId}
+          onChange={setNewId}
+          placeholder="coral-voice-desk"
+          mono
+          desc="Permanent. Sessions and answer pins reference the profile by this id."
+        />
+        <TextField
+          label="Display name"
+          value={newName}
+          onChange={setNewName}
+          placeholder="Coral AI Voice Bot"
+          desc="Shown in listings only."
+        />
+        <p className="inline-note">
+          <strong>Made one by mistake?</strong> Delete it from the editor. The server refuses if an
+          answer pin still points at it, or if any session has used it — sessions carry call
+          evidence and are never removed with a profile. For a profile that has answered calls,
+          publish a corrected version instead; pins on <code>latest</code> pick it up immediately.
+        </p>
+      </Modal>
     </div>
   )
 }

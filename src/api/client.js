@@ -146,6 +146,8 @@ export const api = {
         tenant_id: tenant,
       })}`,
     ),
+  deleteCredential: (gatewayId, tenant = getTenant()) =>
+    request('DELETE', `/v1/tenant/credentials/${enc(gatewayId)}${q({ tenant_id: tenant })}`),
   putCredential: (gatewayId, apiKey, tenant = getTenant()) =>
     request(
       'PUT',
@@ -202,6 +204,7 @@ export const api = {
   createProfile: (b) => request('POST', '/v1/profiles', b),
   getProfileVersion: (id, ver = 'latest') =>
     request('GET', `/v1/profiles/${enc(id)}/versions/${enc(String(ver))}`),
+  deleteProfile: (id) => request('DELETE', `/v1/profiles/${enc(id)}`),
   publishProfile: (id, doc) => request('POST', `/v1/profiles/${enc(id)}/versions`, doc),
   /* ---- flows ---- */
   listFlows: (tenant = getTenant()) =>
@@ -213,6 +216,7 @@ export const api = {
     ),
   getFlow: (id) => request('GET', `/v1/flows/${enc(id)}`),
   createFlow: (b) => request('POST', '/v1/flows', b),
+  deleteFlow: (id) => request('DELETE', `/v1/flows/${enc(id)}`),
   getFlowDraft: (id) => request('GET', `/v1/flows/${enc(id)}/draft`),
   putFlowDraft: (id, doc) => request('PUT', `/v1/flows/${enc(id)}/draft`, doc),
   publishFlow: (id, doc) => request('POST', `/v1/flows/${enc(id)}/versions`, doc),
@@ -228,6 +232,15 @@ export const api = {
     ),
   getBinding: (id) => request('GET', `/v1/bindings/${enc(id)}`),
   putBinding: (id, b) => request('PUT', `/v1/bindings/${enc(id)}`, b),
+  deleteBinding: (id) => request('DELETE', `/v1/bindings/${enc(id)}`),
+  /* ---- sessions: used only by the pin smoke test (A.6 §5.2) ---- */
+  createSession: (b) => request('POST', '/v1/sessions', b),
+  answerSession: (id, b) => request('POST', `/v1/sessions/${enc(id)}/answer`, b || {}),
+  injectText: (id, text) => request('POST', `/v1/sessions/${enc(id)}/inject`, { text }),
+  getTranscript: (id) => request('GET', `/v1/sessions/${enc(id)}/transcript`),
+  stopSession: (id, reason) =>
+    request('POST', `/v1/sessions/${enc(id)}/stop`, { reason: reason || 'operator' }),
+
   /* ---- answer pins ---- */
   getAnswerPins: (tenant = getTenant()) =>
     request(
