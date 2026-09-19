@@ -6,6 +6,10 @@ const COPY = {
   attribution_failed: 'Every segment needs a speaker id and a display name.',
   insufficient_transcript: 'There is no sealed transcript generation to regenerate from.',
   b_rejected_quality: 'The transcript did not meet the quality gate.',
+  unsupported_ai_present: 'Approve is blocked — a structured field is still marked unsupported_ai.',
+  draft_version_conflict: 'This draft changed in another tab. Reload, then review again.',
+  no_draft: 'Minutes are not ready yet. Wait for the job, or regenerate.',
+  no_official: 'There is no official version yet.',
   network: 'Cannot reach Meeting Intelligence on :8011. Is the orchestrator running?',
 }
 

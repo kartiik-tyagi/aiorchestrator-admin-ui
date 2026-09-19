@@ -4,6 +4,9 @@ import { mi } from '../../api/mi/client'
 import { Card, TextField, useToast } from '../../components/ui'
 import { miErrorSentence } from '../../lib/miErrors'
 import { jobTerminal, legalActions } from '../../lib/miLifecycle'
+import DraftEditor from './DraftEditor'
+import ApproveWizard from './ApproveWizard'
+import OfficialPane from './OfficialPane'
 
 const CASE_B_FIXTURE = `{
   "provider_id": "coral",
@@ -34,6 +37,7 @@ export default function MiMeetingDetail() {
   const [decision, setDecision] = useState(null)
   const [transcript, setTranscript] = useState(null)
   const [genPick, setGenPick] = useState('')
+  const [draft, setDraft] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -144,6 +148,15 @@ export default function MiMeetingDetail() {
         </button>
         <button className={`btn ${tab === 'transcript' ? '' : 'secondary'} sm`} onClick={() => setTab('transcript')}>
           Transcript
+        </button>
+        <button className={`btn ${tab === 'draft' ? '' : 'secondary'} sm`} onClick={() => setTab('draft')}>
+          Draft
+        </button>
+        <button className={`btn ${tab === 'approve' ? '' : 'secondary'} sm`} onClick={() => setTab('approve')}>
+          Approve
+        </button>
+        <button className={`btn ${tab === 'official' ? '' : 'secondary'} sm`} onClick={() => setTab('official')}>
+          Official
         </button>
       </div>
 
@@ -270,6 +283,10 @@ export default function MiMeetingDetail() {
           {!transcript?.segments?.length && <p className="desc">No segments yet.</p>}
         </Card>
       )}
+
+      {tab === 'draft' && <DraftEditor meetingId={id} onDraft={setDraft} />}
+      {tab === 'approve' && <ApproveWizard meetingId={id} draft={draft} />}
+      {tab === 'official' && <OfficialPane meetingId={id} />}
     </div>
   )
 }

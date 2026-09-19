@@ -39,12 +39,15 @@ async function request(method, path, body, extraHeaders) {
   }
   if (!res.ok) {
     const err = data?.error
+    const code =
+      (err && typeof err === 'object' && err.code) || (typeof err === 'string' ? err : undefined)
     const message =
       (err && typeof err === 'object' && err.message) ||
+      data?.message ||
       (typeof err === 'string' ? err : null) ||
       res.statusText ||
       `HTTP ${res.status}`
-    throw new ApiError(message, res.status, err?.code, err?.details)
+    throw new ApiError(message, res.status, code, typeof err === 'object' ? err?.details : undefined)
   }
   return data
 }
@@ -89,7 +92,13 @@ export const mi = {
   getOfficial: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/official`),
   getOfficialHistory: (id) =>
     request('GET', `/mi/v1/meetings/${enc(id)}/official/history`),
-  exportMeeting: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/export`),
+  exportMeeting: (id, q = {}) => {
+    const qs = new URLSearchParams()
+    if (q.format) qs.set('format', q.format)
+    if (q.draft) qs.set('draft', '1')
+    const tail = qs.toString()
+    return request('GET', `/mi/v1/meetings/${enc(id)}/export${tail ? `?${tail}` : ''}`)
+  },
   meetingAsk: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/ask`, b),
   createMeetingAskSession: (id, b) =>
     request('POST', `/mi/v1/meetings/${enc(id)}/ask/sessions`, b || {}),
