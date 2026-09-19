@@ -42,6 +42,17 @@ export default function Bindings() {
   const [newMode, setNewMode] = useState('inline_faq')
   const [q, setQ] = useState('')
   const locales = catalog?.tts_locales_v1 ?? ['en-IN']
+  const INTENT_RE = /^[a-z0-9][a-z0-9_]{0,63}$/
+  const emptyFaqEntry = (n) => ({
+    id: `faq_${n}`,
+    questions: [],
+    aliases: [],
+    intents: [],
+    department: '',
+    product: '',
+    text: {},
+  })
+  const acceptIntents = (next) => next.filter((x) => INTENT_RE.test(x))
 
   const allBindings = list.data?.bindings ?? []
   const bNeedle = q.trim().toLowerCase()
@@ -169,29 +180,6 @@ Inform nodes using it will stop answering immediately. ` +
     }
   }
 
-  const removeBinding = async (bid) => {
-    if (
-      !confirm(
-        `Delete binding "${bid}"?
-
-This is permanent. Disabling keeps it and is reversible. ` +
-          `The server refuses if a published flow still Informs from it.`,
-      )
-    )
-      return
-    setBusy(true)
-    try {
-      await api.deleteBinding(bid)
-      toast.ok(`Deleted ${bid}`)
-      reset()
-      await list.reload()
-    } catch (e) {
-      toast.fail(e, 'Delete binding')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   const save = async () => {
     const bid = id.trim()
     if (!bid) {
@@ -249,7 +237,9 @@ This is permanent. Disabling keeps it and is reversible. ` +
           <h1>Bindings</h1>
           <p>
             Knowledge and CRM sources referenced by <code>Inform</code> nodes. A flow may only use a
-            binding it declares in <code>binding_refs</code>, and the answer text is per locale.
+            binding it declares in <code>binding_refs</code>. These fields are how the bot finds the
+            answer — not just the words. There is no delete; Disable stops Inform without losing
+            entries.
           </p>
         </div>
         <div className="page-actions">
@@ -358,16 +348,6 @@ This is permanent. Disabling keeps it and is reversible. ` +
                     {status === 'active' ? 'Disable' : 'Enable'}
                   </button>
                 )}
-                {id && list.data?.bindings?.some((b) => b.id === id) && (
-                  <button
-                    className="btn danger"
-                    onClick={() => void removeBinding(id)}
-                    disabled={busy}
-                    title="Delete permanently. Disabling is usually safer."
-                  >
-                    Delete
-                  </button>
-                )}
                 {dirty && <span className="badge warn">unsaved changes</span>}
               </>
             }
@@ -457,19 +437,12 @@ This is permanent. Disabling keeps it and is reversible. ` +
           {kind === 'knowledge' && mode === 'inline_faq' && (
             <Card
               title={`Inline FAQ — ${entries.length} entr${entries.length === 1 ? 'y' : 'ies'}`}
-              hint="Each entry matches on its questions and answers in the caller's active locale. A missing locale is what triggers the FAQ locale warnings on flow publish."
+              hint="These fields are how the bot finds the answer — not just the words. Intents, department, product and aliases stay on the entry when you save."
               actions={
                 <button
                   className="btn secondary sm"
                   onClick={() => {
-                    setEntries((xs) => [
-                      ...xs,
-                      {
-                        id: `faq_${xs.length + 1}`,
-                        questions: [],
-                        text: {},
-                      },
-                    ])
+                    setEntries((xs) => [...xs, emptyFaqEntry(xs.length + 1)])
                     setDirty(true)
                   }}
                 >
@@ -487,15 +460,59 @@ This is permanent. Disabling keeps it and is reversible. ` +
                     </span>
                   </summary>
                   <div className="body">
-                    <TextField
-                      label="Entry id"
-                      value={e.id ?? ''}
+                    <div className="row">
+                      <TextField
+                        label="Entry id"
+                        value={e.id ?? ''}
+                        onChange={(v) =>
+                          setEntry(i, {
+                            id: v,
+                          })
+                        }
+                        mono
+                      />
+                      <TextField
+                        label="Department"
+                        value={e.department ?? ''}
+                        onChange={(v) =>
+                          setEntry(i, {
+                            department: v,
+                          })
+                        }
+                        placeholder="sales"
+                      />
+                      <TextField
+                        label="Product"
+                        value={e.product ?? ''}
+                        onChange={(v) =>
+                          setEntry(i, {
+                            product: v,
+                          })
+                        }
+                        placeholder="Media Gateway"
+                      />
+                    </div>
+                    <StringList
+                      label="Intents"
+                      values={e.intents ?? []}
                       onChange={(v) =>
                         setEntry(i, {
-                          id: v,
+                          intents: acceptIntents(v),
                         })
                       }
-                      mono
+                      placeholder="media_gateway"
+                      desc="Must match an intent id on the profile that will use this binding. Use lowercase letters, digits and underscore."
+                    />
+                    <StringList
+                      label="Aliases"
+                      values={e.aliases ?? []}
+                      onChange={(v) =>
+                        setEntry(i, {
+                          aliases: v,
+                        })
+                      }
+                      placeholder="media gate bhege"
+                      desc="Noisy or roman speech-to-text variants of the product or question."
                     />
                     <StringList
                       label="Questions"

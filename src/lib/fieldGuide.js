@@ -390,6 +390,31 @@ export const FIELD_GUIDE = [
               'Different ways a caller might ask this. Add several — "opening hours", "when do you open", "what time".',
           },
           {
+            name: 'Aliases',
+            req: 'optional',
+            what: 'Noisy or roman STT variants. Scored with questions when the caller mangles the name.',
+            plain:
+              'How the words come out of speech-to-text when the caller slurs or code-switches — e.g. "media gate bhege".',
+          },
+          {
+            name: 'Intents',
+            req: 'optional',
+            what: 'Catalog intent ids this entry answers. Must match an intent id on the profile that will use this binding.',
+            plain: 'Ties this answer to a named intent such as product_question or media_gateway.',
+          },
+          {
+            name: 'Department',
+            req: 'optional',
+            what: 'Room steer (sales / support / billing). Not a hard block.',
+            plain: 'Which room this answer belongs with, so the bot can prefer it when the caller is already in that room.',
+          },
+          {
+            name: 'Product',
+            req: 'optional',
+            what: 'Product steer (IRIS IVDX, Media Gateway, …).',
+            plain: 'Which product this answer is about, so a mangled product name still finds this entry.',
+          },
+          {
             name: 'Answer text per locale',
             req: 'conditional',
             what: 'The default locale is what matters; missing locales produce non-blocking FAQ locale warnings on flow publish.',

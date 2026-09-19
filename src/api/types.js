@@ -366,6 +366,10 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @typedef {Object} InlineFaqEntry
  * @property {string} id
  * @property {string[]} [questions]
+ * @property {string[]} [aliases]   noisy / roman STT variants
+ * @property {string[]} [intents]   catalog intent ids this entry answers
+ * @property {string} [department]  room steer — not a hard block
+ * @property {string} [product]     product steer
  * @property {Record<string, string>} [text]  locale → answer
  *
  * @typedef {Object} BindingConfig

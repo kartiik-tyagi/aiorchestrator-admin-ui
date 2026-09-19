@@ -232,7 +232,6 @@ export const api = {
     ),
   getBinding: (id) => request('GET', `/v1/bindings/${enc(id)}`),
   putBinding: (id, b) => request('PUT', `/v1/bindings/${enc(id)}`, b),
-  deleteBinding: (id) => request('DELETE', `/v1/bindings/${enc(id)}`),
   /* ---- sessions: used only by the pin smoke test (A.6 §5.2) ---- */
   createSession: (b) => request('POST', '/v1/sessions', b),
   answerSession: (id, b) => request('POST', `/v1/sessions/${enc(id)}/answer`, b || {}),
