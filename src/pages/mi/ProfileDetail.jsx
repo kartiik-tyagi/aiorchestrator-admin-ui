@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { mi } from '../../api/mi/client'
 import { Card, NumberField, StringList, TextField, useToast } from '../../components/ui'
+import AskPane from './AskPane'
 import { miErrorSentence } from '../../lib/miErrors'
 
 function parseLangs(raw) {
@@ -274,6 +275,7 @@ export default function MiProfileDetail() {
           Save KB doc
         </button>
       </Card>
+      <AskPane scope="profile" targetId={id} />
     </div>
   )
 }

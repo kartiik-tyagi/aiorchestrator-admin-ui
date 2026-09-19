@@ -3,7 +3,7 @@
  *
  * Probe (2026-09-19, this binary):
  *   GET /mi/v1/meta                 → 404  (no Meta screen)
- *   GET /mi/v1/profiles/{id}/actions → 404  (hide ledger until a later probe is 200)
+ *   GET /mi/v1/profiles/{id}/actions → 404  (hide ledger; re-probed 2026-09-19 still 404)
  *
  * V1 MI is open — do not send the Call Center Bearer token or tenant_id.
  */

@@ -7,6 +7,7 @@ import { jobTerminal, legalActions } from '../../lib/miLifecycle'
 import DraftEditor from './DraftEditor'
 import ApproveWizard from './ApproveWizard'
 import OfficialPane from './OfficialPane'
+import AskPane from './AskPane'
 
 const CASE_B_FIXTURE = `{
   "provider_id": "coral",
@@ -158,6 +159,9 @@ export default function MiMeetingDetail() {
         <button className={`btn ${tab === 'official' ? '' : 'secondary'} sm`} onClick={() => setTab('official')}>
           Official
         </button>
+        <button className={`btn ${tab === 'ask' ? '' : 'secondary'} sm`} onClick={() => setTab('ask')}>
+          Ask
+        </button>
       </div>
 
       {tab === 'overview' && (
@@ -287,6 +291,19 @@ export default function MiMeetingDetail() {
       {tab === 'draft' && <DraftEditor meetingId={id} onDraft={setDraft} />}
       {tab === 'approve' && <ApproveWizard meetingId={id} draft={draft} />}
       {tab === 'official' && <OfficialPane meetingId={id} />}
+      {tab === 'ask' && (
+        <AskPane
+          scope="meeting"
+          targetId={id}
+          disabledReason={
+            facet.lifecycle === 'cancelled'
+              ? 'This meeting is cancelled — Ask is not offered.'
+              : !facet.official?.id && !facet.draft?.ready && !facet.transcript?.authoritative_generation
+                ? 'Nothing to ask yet — wait for a transcript, draft, or official.'
+                : ''
+          }
+        />
+      )}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import MiMeetingDetail from '../pages/mi/MeetingDetail'
 import MiMeetings from '../pages/mi/Meetings'
 import MiProfileDetail from '../pages/mi/ProfileDetail'
 import MiProfiles from '../pages/mi/Profiles'
+import MiRetention from '../pages/mi/Retention'
 import ProductSwitch from './ProductSwitch'
 
 function Sidebar() {
@@ -29,6 +30,12 @@ function Sidebar() {
         </NavLink>
         <NavLink to="/MI/admin/meetings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <span className="nav-label">Meetings</span>
+        </NavLink>
+      </div>
+      <div className="side-foot">
+        <div className="nav-section">Archive</div>
+        <NavLink to="/MI/admin/retention" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <span className="nav-label">Retention</span>
         </NavLink>
       </div>
     </aside>
@@ -79,6 +86,7 @@ function ShellInner() {
           <Route path="profiles/:id" element={<MiProfileDetail />} />
           <Route path="meetings" element={<MiMeetings />} />
           <Route path="meetings/:id" element={<MiMeetingDetail />} />
+          <Route path="retention" element={<MiRetention />} />
           <Route path="*" element={<Navigate to="/MI/admin" replace />} />
         </Routes>
       </div>
