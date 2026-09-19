@@ -17,21 +17,21 @@
 export const SETUP_STEPS = [
   {
     n: 1,
-    to: '/engines',
+    to: '/CC/admin/engines',
     label: 'Engines & credentials',
     short: 'Engines',
     why: 'Bind listen / think / speak to a registered gateway, and store the vendor API key.',
   },
   {
     n: 2,
-    to: '/profiles',
+    to: '/CC/admin/profiles',
     label: 'Profiles',
     short: 'Profile',
     why: 'Create the bot identity and publish version 1 — voice, locales, routers.',
   },
   {
     n: 3,
-    to: '/bindings',
+    to: '/CC/admin/bindings',
     label: 'Bindings',
     short: 'Binding',
     why: 'Optional. Only needed if the flow answers FAQs from an Inform node.',
@@ -39,21 +39,21 @@ export const SETUP_STEPS = [
   },
   {
     n: 4,
-    to: '/flows',
+    to: '/CC/admin/flows',
     label: 'Flows',
     short: 'Flow',
     why: 'Draw the conversation graph and publish it. This is the bulk of the work.',
   },
   {
     n: 5,
-    to: '/pins',
+    to: '/CC/admin/pins',
     label: 'Answer pins',
     short: 'Pin',
     why: 'Tie the profile to the published flow version. Without this every call is refused.',
   },
   {
     n: 6,
-    to: '/settings',
+    to: '/CC/admin/settings',
     label: 'Settings & fallback',
     short: 'Settings',
     why: 'coral.base_url for transfers, and WAV prompts for when the AI pipeline fails.',
@@ -100,7 +100,7 @@ export function readinessChecklist({ status, profiles, flows, bindings, pins, pu
     {
       n: 1,
       label: 'Engines bound',
-      to: '/engines',
+      to: '/CC/admin/engines',
       done: enginesOk,
       detail: enginesOk
         ? `${engineIds.listen} / ${engineIds.think} / ${engineIds.speak}`
@@ -109,7 +109,7 @@ export function readinessChecklist({ status, profiles, flows, bindings, pins, pu
     {
       n: 2,
       label: 'Profile published',
-      to: '/profiles',
+      to: '/CC/admin/profiles',
       done: publishedCount > 0,
       detail:
         publishedCount > 0
@@ -121,7 +121,7 @@ export function readinessChecklist({ status, profiles, flows, bindings, pins, pu
     {
       n: 3,
       label: 'Binding created',
-      to: '/bindings',
+      to: '/CC/admin/bindings',
       optional: true,
       done: (bindings?.length ?? 0) > 0,
       detail: bindings?.length
@@ -131,7 +131,7 @@ export function readinessChecklist({ status, profiles, flows, bindings, pins, pu
     {
       n: 4,
       label: 'Flow published',
-      to: '/flows',
+      to: '/CC/admin/flows',
       done: publishedFlows.length > 0,
       detail: publishedFlows.length
         ? publishedFlows.map((f) => `${f.id}@v${f.current_version}`).join(', ')
@@ -142,7 +142,7 @@ export function readinessChecklist({ status, profiles, flows, bindings, pins, pu
     {
       n: 5,
       label: 'Answer pin live',
-      to: '/pins',
+      to: '/CC/admin/pins',
       done: livePins.length > 0,
       detail: livePins.length
         ? `${livePins.length} pin(s) resolve to a published flow and profile`

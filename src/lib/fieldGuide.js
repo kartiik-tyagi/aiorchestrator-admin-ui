@@ -28,7 +28,7 @@ export const FIELD_GUIDE = [
   {
     step: 1,
     page: 'Engines & credentials',
-    to: '/engines',
+    to: '/CC/admin/engines',
     intro:
       'Which vendor software does the hearing, the thinking and the talking. Nothing else works until this is set.',
     groups: [
@@ -83,7 +83,7 @@ export const FIELD_GUIDE = [
   {
     step: 2,
     page: 'Profiles',
-    to: '/profiles',
+    to: '/CC/admin/profiles',
     intro:
       'The bot’s identity — its voice, which engines it routes to, and how it renders speech. Publishing creates an immutable version; nothing is ever edited in place.',
     groups: [
@@ -337,7 +337,7 @@ export const FIELD_GUIDE = [
   {
     step: 3,
     page: 'Bindings',
-    to: '/bindings',
+    to: '/CC/admin/bindings',
     intro:
       'A knowledge source an Inform node reads answers from. Skip this entirely if your flow only routes calls.',
     groups: [
@@ -416,7 +416,7 @@ export const FIELD_GUIDE = [
   {
     step: 4,
     page: 'Flows & the graph builder',
-    to: '/flows',
+    to: '/CC/admin/flows',
     intro:
       'The conversation itself. The graph is law: the bot may only travel along edges you have drawn, which is what makes it safe on a phone line.',
     groups: [
@@ -583,7 +583,7 @@ export const FIELD_GUIDE = [
   {
     step: 5,
     page: 'Answer pins',
-    to: '/pins',
+    to: '/CC/admin/pins',
     intro:
       'The switch that makes a call answerable. Without a pin, every live or chat session is refused with 422 flow_pin_required.',
     groups: [
@@ -625,7 +625,7 @@ export const FIELD_GUIDE = [
   {
     step: 6,
     page: 'Settings & fallback',
-    to: '/settings',
+    to: '/CC/admin/settings',
     intro: 'Platform values and the audio played when the AI pipeline cannot serve a call.',
     groups: [
       {

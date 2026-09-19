@@ -11,9 +11,13 @@ npm install
 npm run dev      # http://localhost:5183
 ```
 
-The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http://host:port npm run dev`.
+Open **`http://localhost:5183/`** — product picker. Call Center lives at **`/CC/admin`**. Meeting Intelligence lives at **`/MI/admin`**. Old bookmarks (`/engines`, `/profiles`, `/flows`, `/bindings`, `/pins`, `/settings`, `/tutorial`) redirect into `/CC/admin/…`.
+
+The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http://host:port npm run dev`. Vite proxies `/v1`, `/mi/v1`, and `/edge` to that origin.
 
 > Vite 8 binds IPv6 only, so use **`localhost:5183`**, not `127.0.0.1:5183`.
+
+**Phase plans (UI-only sync with the live kernel, Call Center + Meeting Intelligence):** start at [`docs/phases/README.md`](docs/phases/README.md). Programme lock: [`docs/phases/PROGRAMME.md`](docs/phases/PROGRAMME.md). Do not implement from this README — implement one phase file at a time.
 
 ---
 
@@ -23,7 +27,7 @@ Nine domains, all through the Control API. Configuration lives in Postgres — m
 only and never insert data, so a fresh database is empty until something writes to it.
 
 The sidebar is ordered as the configuration order — work top to bottom. A hidden walkthrough for a
-blank database lives at **`/tutorial`**; it is reachable by typing the URL only, and is deliberately
+blank database lives at **`/CC/admin/tutorial`**; it is reachable by typing the URL only, and is deliberately
 not linked from the sidebar or any component. The order is defined once in `src/lib/setupSteps.js`,
 which the sidebar and the dashboard checklist both read.
 
@@ -177,6 +181,10 @@ src/
     types.js       JSDoc typedefs + closed-set constants mirroring the Go structs
     client.js      fetch wrapper; ApiError carries the server's error envelope
     catalog.jsx    catalog + gateways + platform status context
+    mi/client.js   Meeting Intelligence Control stub (filled in later phases)
+  shells/
+    CcShell.jsx    Call Center chrome + /CC/admin routes
+    MiShell.jsx    Meeting Intelligence chrome + /MI/admin placeholder
   lib/
     flowValidate.js     mirror of internal/flow/validate.go
     profileValidate.js  mirror of internal/profile/validate.go

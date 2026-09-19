@@ -158,7 +158,7 @@ export default function Dashboard() {
         {allDone ? (
           <div className="probe ok">
             Configuration is complete. Verify it end to end from{' '}
-            <Link to="/pins">Answer pins → Test this pin</Link>.
+            <Link to="/CC/admin/pins">Answer pins → Test this pin</Link>.
           </div>
         ) : (
           <div className="probe warn">

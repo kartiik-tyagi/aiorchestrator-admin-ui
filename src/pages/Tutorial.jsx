@@ -7,11 +7,11 @@ import { readinessChecklist } from '../lib/setupSteps'
 import { FIELD_GUIDE, REQ_LABEL } from '../lib/fieldGuide'
 
 /**
- * Hidden walkthrough at /tutorial.
+ * Hidden walkthrough at /CC/admin/tutorial (legacy /tutorial redirects here).
  *
  * Deliberately not linked from the sidebar or any component — reachable only by
  * typing the URL. If you ever want it discoverable, add it to SETUP_STEPS or the
- * nav array in App.jsx; nothing else needs to change.
+ * nav array in CcShell; nothing else needs to change.
  *
  * It shows live status per step, so it doubles as a progress tracker on a fresh
  * database rather than being static prose.
@@ -214,7 +214,7 @@ export default function Tutorial() {
 
       <Step n={1} title="Bind the engines" done={at(1)}>
         <p style={{ marginTop: 0 }}>
-          <Link to="/engines">Engines &amp; credentials</Link> → pick a gateway for{' '}
+          <Link to="/CC/admin/engines">Engines &amp; credentials</Link> → pick a gateway for{' '}
           <strong>Listen</strong> (STT), <strong>Think</strong> (LLM) and <strong>Speak</strong>{' '}
           (TTS) → Save.
         </p>
@@ -234,7 +234,7 @@ export default function Tutorial() {
 
       <Step n={2} title="Create and publish a profile" done={at(2)}>
         <p style={{ marginTop: 0 }}>
-          <Link to="/profiles">Profiles</Link> → enter an id (e.g. <code>coral-voice-desk</code>) →
+          <Link to="/CC/admin/profiles">Profiles</Link> → enter an id (e.g. <code>coral-voice-desk</code>) →
           Create. Then fill in the form and hit <strong>Publish version</strong>.
         </p>
         <p>The minimum that will publish:</p>
@@ -265,7 +265,7 @@ export default function Tutorial() {
           <code>Inform</code> node. Skip it for a pure routing menu.
         </p>
         <p>
-          <Link to="/bindings">Bindings</Link> → id, kind <code>knowledge</code>, mode{' '}
+          <Link to="/CC/admin/bindings">Bindings</Link> → id, kind <code>knowledge</code>, mode{' '}
           <code>inline_faq</code> → add entries. Each entry has questions to match on and answer
           text per locale. Do this <em>before</em> step 4, because the flow has to reference a
           binding that already exists.
@@ -274,7 +274,7 @@ export default function Tutorial() {
 
       <Step n={4} title="Build and publish the flow" done={at(4)}>
         <p style={{ marginTop: 0 }}>
-          <Link to="/flows">Flows</Link> → create one. You get a valid{' '}
+          <Link to="/CC/admin/flows">Flows</Link> → create one. You get a valid{' '}
           <code>Entry → Speak → End</code> starter, so it will publish immediately and you can grow
           it from there.
         </p>
@@ -307,7 +307,7 @@ export default function Tutorial() {
 
       <Step n={5} title="Pin it, then prove it works" done={at(5)}>
         <p style={{ marginTop: 0 }}>
-          <Link to="/pins">Answer pins</Link> → Add pin → choose the profile and flow, leave the
+          <Link to="/CC/admin/pins">Answer pins</Link> → Add pin → choose the profile and flow, leave the
           version as <code>latest</code> → Save.
         </p>
         <p>
@@ -324,7 +324,7 @@ export default function Tutorial() {
 
       <Step n={6} title="Settings and fallback prompts" done={false} optional>
         <p style={{ marginTop: 0 }}>
-          <Link to="/settings">Settings &amp; fallback</Link>. Two things matter here:
+          <Link to="/CC/admin/settings">Settings &amp; fallback</Link>. Two things matter here:
         </p>
         <p>
           <code>coral.base_url</code> — the Coral platform address the transfer and CRM gateways

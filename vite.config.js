@@ -14,6 +14,10 @@ export default defineConfig({
         target: ORCH,
         changeOrigin: true,
       },
+      '/mi/v1': {
+        target: ORCH,
+        changeOrigin: true,
+      },
       '/edge': {
         target: ORCH,
         changeOrigin: true,

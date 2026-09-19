@@ -833,7 +833,7 @@ function BuilderInner() {
           borderTop: '1px solid var(--border)',
         }}
       >
-        <Link to="/flows" className="btn secondary sm">
+        <Link to="/CC/admin/flows" className="btn secondary sm">
           ← Flows
         </Link>
         <strong

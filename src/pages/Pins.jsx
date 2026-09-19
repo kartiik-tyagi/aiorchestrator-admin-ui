@@ -249,7 +249,7 @@ export default function Pins() {
               {r.flow_id && pub == null && (
                 <div className="probe err">
                   <code>{r.flow_id}</code> has no published version — this pin cannot answer a call.{' '}
-                  <Link to={`/flows/${encodeURIComponent(r.flow_id)}/builder`}>
+                  <Link to={`/CC/admin/flows/${encodeURIComponent(r.flow_id)}/builder`}>
                     Open the builder and publish
                   </Link>
                   .

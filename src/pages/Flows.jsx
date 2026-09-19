@@ -119,7 +119,7 @@ export default function Flows() {
       setId('')
       setName('')
       await list.reload()
-      nav(`/flows/${encodeURIComponent(fid)}/builder`)
+      nav(`/CC/admin/flows/${encodeURIComponent(fid)}/builder`)
     } catch (e) {
       toast.fail(e, 'Create flow')
     } finally {
@@ -200,7 +200,7 @@ export default function Flows() {
                   <td className="row-actions">
                     <Link
                       className="btn sm secondary"
-                      to={`/flows/${encodeURIComponent(f.id)}/builder`}
+                      to={`/CC/admin/flows/${encodeURIComponent(f.id)}/builder`}
                     >
                       Open builder
                     </Link>{' '}
