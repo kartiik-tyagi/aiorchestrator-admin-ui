@@ -11,8 +11,8 @@ import { ApiError } from '../client.js'
 
 const enc = encodeURIComponent
 
-async function request(method, path, body) {
-  const headers = { Accept: 'application/json' }
+async function request(method, path, body, extraHeaders) {
+  const headers = { Accept: 'application/json', ...(extraHeaders ?? {}) }
   const init = { method, headers }
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json'
@@ -62,16 +62,24 @@ export const mi = {
   createProfileAskSession: (id, b) =>
     request('POST', `/mi/v1/profiles/${enc(id)}/ask/sessions`, b || {}),
 
-  listMeetings: () => request('GET', '/mi/v1/meetings'),
+  listMeetings: (profileId) =>
+    request('GET', `/mi/v1/meetings${profileId ? `?profile_id=${enc(profileId)}` : ''}`),
   createMeeting: (b) => request('POST', '/mi/v1/meetings', b),
   getMeeting: (id) => request('GET', `/mi/v1/meetings/${enc(id)}`),
   startCapture: (id, b) =>
     request('POST', `/mi/v1/meetings/${enc(id)}/start-capture`, b || {}),
   endMeeting: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/end`, b || {}),
   cancelMeeting: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/cancel`, b || {}),
-  pushTranscripts: (id, b) =>
-    request('POST', `/mi/v1/meetings/${enc(id)}/transcripts`, b),
-  getTranscript: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/transcript`),
+  pushTranscripts: (id, b, hdrs = {}) =>
+    request('POST', `/mi/v1/meetings/${enc(id)}/transcripts`, b, {
+      ...(hdrs.idempotencyKey ? { 'Idempotency-Key': hdrs.idempotencyKey } : {}),
+      ...(hdrs.ingestToken ? { 'X-MI-Ingest-Token': hdrs.ingestToken } : {}),
+    }),
+  getTranscript: (id, generation) =>
+    request(
+      'GET',
+      `/mi/v1/meetings/${enc(id)}/transcript${generation != null ? `?generation=${enc(String(generation))}` : ''}`,
+    ),
   regenerate: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/regenerate`, b || {}),
   getDraft: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/draft`),
   patchDraft: (id, b) => request('PATCH', `/mi/v1/meetings/${enc(id)}/draft`, b),
