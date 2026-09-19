@@ -224,6 +224,8 @@ export const api = {
   getFlowDraft: (id) => request('GET', `/v1/flows/${enc(id)}/draft`),
   putFlowDraft: (id, doc) => request('PUT', `/v1/flows/${enc(id)}/draft`, doc),
   publishFlow: (id, doc) => request('POST', `/v1/flows/${enc(id)}/versions`, doc),
+  validateFlow: (id, doc) => request('POST', `/v1/flows/${enc(id)}/validate`, doc),
+  listFlowVersions: (id) => request('GET', `/v1/flows/${enc(id)}/versions`),
   getFlowVersion: (id, ver) => request('GET', `/v1/flows/${enc(id)}/versions/${enc(String(ver))}`),
   /* ---- bindings ---- */
   listBindings: (tenant = getTenant(), kind) =>

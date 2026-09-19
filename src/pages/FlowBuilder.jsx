@@ -12,7 +12,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useCatalog } from '../api/catalog'
 import { api } from '../api/client'
-import { useToast } from '../components/ui'
+import { Modal, useToast } from '../components/ui'
 import { localeGaps, validateFlow } from '../lib/flowValidate'
 import { SECONDARY_KINDS, defaultEdgeKind, edgeLabel, nextEdgeId } from '../lib/flowGraph'
 import {
@@ -103,8 +103,15 @@ const SECTION_IDS = [
   'properties',
   'prompt',
   'repair',
+  'interrupt',
+  'listen-policy',
+  'intents',
+  'slot',
+  'decide',
   'edge',
   'flow-settings',
+  'globals',
+  'flow-policy',
   'matrix',
   'unused-prompts',
 ]
@@ -139,6 +146,13 @@ function BuilderInner() {
   const [publishedVersion, setPublishedVersion] = useState(null)
   const [showJson, setShowJson] = useState(false)
   const [jsonText, setJsonText] = useState('')
+  const [serverIssues, setServerIssues] = useState([])
+  const [versions, setVersions] = useState([])
+  const [versionsOpen, setVersionsOpen] = useState(false)
+  const [inspectVer, setInspectVer] = useState(null)
+  const [catalogProfileId, setCatalogProfileId] = useState('')
+  const [profileIds, setProfileIds] = useState([])
+  const [intentCatalog, setIntentCatalog] = useState([])
   const wrapRef = useRef(null)
   const panelRef = useRef(null)
 
@@ -276,7 +290,7 @@ function BuilderInner() {
 
   const load = useCallback(async () => {
     try {
-      const [draft, binds, meta] = await Promise.all([
+      const [draft, binds, meta, pins, profiles, vers] = await Promise.all([
         api.getFlowDraft(flowId).catch((e) => {
           if (e.status === 404) return null
           throw e
@@ -285,6 +299,9 @@ function BuilderInner() {
           bindings: [],
         })),
         api.getFlow(flowId).catch(() => null),
+        api.getAnswerPins().catch(() => ({ pins: [] })),
+        api.listProfiles().catch(() => ({ profiles: [] })),
+        api.listFlowVersions(flowId).catch(() => ({ versions: [] })),
       ])
       const d = draft?.doc ?? emptyDoc()
       setLayout(resolveLayout(d, flowId))
@@ -292,6 +309,12 @@ function BuilderInner() {
       setBindingIds((binds.bindings ?? []).map((b) => b.id))
       // An unpublished flow reports current_version 0, not null.
       setPublishedVersion(meta?.current_version > 0 ? meta.current_version : null)
+      setVersions(vers.versions ?? [])
+      const ids = (profiles.profiles ?? []).map((p) => p.id)
+      setProfileIds(ids)
+      const pinned = (pins.pins ?? []).find((p) => p.flow_id === flowId)
+      setCatalogProfileId(pinned?.profile_id || ids[0] || '')
+      setServerIssues([])
       history.current = { past: [], future: [], at: 0, burst: 0 }
       setLoaded(true)
       setDirty(false)
@@ -305,6 +328,35 @@ function BuilderInner() {
   useEffect(() => {
     if (showJson) setJsonText(JSON.stringify(doc, null, 2))
   }, [showJson, doc])
+  useEffect(() => {
+    if (!catalogProfileId) {
+      setIntentCatalog([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const draft = await api.getProfileDraft(catalogProfileId)
+        const got = draft.document ?? draft.doc
+        if (!cancelled && got) {
+          setIntentCatalog(got.intent_catalog ?? [])
+          return
+        }
+      } catch {
+        /* no draft — try latest published */
+      }
+      try {
+        const v = await api.getProfileVersion(catalogProfileId, 'latest')
+        const got = v.document ?? v.doc
+        if (!cancelled) setIntentCatalog(got?.intent_catalog ?? [])
+      } catch {
+        if (!cancelled) setIntentCatalog([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [catalogProfileId])
 
   // Leaving with unsaved work: a 30-node flow is an hour of clicking. The app
   // uses a plain BrowserRouter (no data router, so no useBlocker), so in-app
@@ -339,6 +391,13 @@ function BuilderInner() {
 
   const issues = useMemo(() => validateFlow(doc, catalog ?? undefined), [doc, catalog])
   const errors = issues.filter((i) => i.level === 'error')
+  const allowedIntentIds = useMemo(
+    () =>
+      (intentCatalog ?? [])
+        .filter((row) => (row.scope ?? '') !== 'global' && (row.id ?? '').trim())
+        .map((row) => row.id.trim()),
+    [intentCatalog],
+  )
   const badRefs = useMemo(() => new Set(errors.map((i) => i.ref).filter(Boolean)), [errors])
   const gaps = useMemo(() => localeGaps(doc, catalog?.tts_locales_v1 ?? []), [doc, catalog])
 
@@ -726,6 +785,24 @@ function BuilderInner() {
       setBusy(false)
     }
   }
+  const checkServer = async () => {
+    setBusy(true)
+    try {
+      await api.validateFlow(flowId, docForWire())
+      setServerIssues([])
+      toast.ok('Server validate: ok')
+    } catch (e) {
+      setServerIssues([
+        {
+          level: 'error',
+          message: e.detailText ? `${e.message} (${e.detailText})` : e.message || 'Server validate failed',
+        },
+      ])
+      toast.fail(e, 'Server validate')
+    } finally {
+      setBusy(false)
+    }
+  }
   const publish = async () => {
     if (errors.length) {
       toast.push('err', `Fix ${errors.length} error(s) before publishing`)
@@ -735,20 +812,46 @@ function BuilderInner() {
     try {
       persistLayout(layoutRef.current)
       const wire = docForWire()
+      await api.validateFlow(flowId, wire)
+      setServerIssues([])
       await api.putFlowDraft(flowId, wire)
       const got = await api.publishFlow(flowId, wire)
       setDirty(false)
       setPublishedVersion(got.version)
       setWarnings(got.warnings ?? [])
+      const listed = await api.listFlowVersions(flowId).catch(() => ({ versions: [] }))
+      setVersions(listed.versions ?? [])
       toast.ok(
         `Published version ${got.version}` +
           (got.content_hash ? ` (${got.content_hash.slice(0, 12)})` : '') +
           (got.warnings?.length ? ` — ${got.warnings.length} locale warning(s)` : ''),
       )
     } catch (e) {
+      if (e.code === 'flow_invalid' || e.status === 422) {
+        setServerIssues([
+          {
+            level: 'error',
+            message: e.detailText ? `${e.message} (${e.detailText})` : e.message,
+          },
+        ])
+      }
       toast.fail(e, 'Publish')
     } finally {
       setBusy(false)
+    }
+  }
+  const inspectVersion = async (v) => {
+    try {
+      const fv = await api.getFlowVersion(flowId, v)
+      setInspectVer({
+        version: fv.version ?? v,
+        doc: withoutCx(fv.doc ?? {}),
+        published_at: fv.published_at,
+        content_hash: fv.content_hash,
+      })
+      setVersionsOpen(true)
+    } catch (e) {
+      toast.fail(e, 'Inspect version')
     }
   }
   const replaceDoc = (next) => {
@@ -897,6 +1000,16 @@ function BuilderInner() {
             Load v{publishedVersion}
           </button>
         )}
+        <button
+          className="btn secondary sm"
+          onClick={() => setVersionsOpen(true)}
+          disabled={!versions.length && publishedVersion == null}
+        >
+          Versions{versions.length ? ` (${versions.length})` : ''}
+        </button>
+        <button className="btn secondary sm" onClick={() => void checkServer()} disabled={busy}>
+          Check
+        </button>
         <button className="btn secondary sm" onClick={() => setShowJson((v) => !v)}>
           {showJson ? 'Canvas' : 'JSON'}
         </button>
@@ -1224,6 +1337,15 @@ function BuilderInner() {
                     </div>
                   )}
 
+                  {!!serverIssues.length && (
+                    <div className="probe err" style={{ marginTop: 0, marginBottom: '0.6rem' }}>
+                      Server validate:
+                      {serverIssues.map((w, i) => (
+                        <div key={i}>• {w.message}</div>
+                      ))}
+                    </div>
+                  )}
+
                   <Inspector
                     doc={doc}
                     setDoc={setDoc}
@@ -1241,6 +1363,10 @@ function BuilderInner() {
                     onCreateEdge={createPanelEdge}
                     onFocusNode={focusNode}
                     onHoverEdge={setHoverEdgeId}
+                    allowedIntentIds={allowedIntentIds}
+                    catalogProfileId={catalogProfileId}
+                    onCatalogProfileId={setCatalogProfileId}
+                    profileIds={profileIds}
                   />
                 </div>
               </SectionProvider>
@@ -1313,6 +1439,82 @@ function BuilderInner() {
           </aside>
         </div>
       )}
+
+      <Modal
+        open={versionsOpen}
+        title={inspectVer ? `Published v${inspectVer.version} (read-only)` : 'Published versions'}
+        hint={
+          inspectVer
+            ? `${inspectVer.published_at ?? ''} ${inspectVer.content_hash ? inspectVer.content_hash.slice(0, 12) : ''}`.trim()
+            : 'Inspect a published document without changing the draft.'
+        }
+        onClose={() => {
+          setVersionsOpen(false)
+          setInspectVer(null)
+        }}
+        onSubmit={() => {
+          setVersionsOpen(false)
+          setInspectVer(null)
+        }}
+        submitLabel="Done"
+      >
+        {inspectVer ? (
+          <>
+            <p className="hint">
+              This is the published document. It is not written back unless you copy it into the
+              builder.
+            </p>
+            <pre
+              className="mono"
+              style={{
+                maxHeight: 360,
+                overflow: 'auto',
+                fontSize: 11,
+                whiteSpace: 'pre-wrap',
+              }}
+            >
+              {JSON.stringify(inspectVer.doc, null, 2)}
+            </pre>
+            <div className="actions tight">
+              <button
+                type="button"
+                className="btn secondary sm"
+                onClick={() => {
+                  setVersionsOpen(false)
+                  setInspectVer(null)
+                  void loadVersion(inspectVer.version)
+                }}
+              >
+                Copy v{inspectVer.version} into builder
+              </button>
+            </div>
+          </>
+        ) : (
+          <div>
+            {(versions.length
+              ? versions
+              : publishedVersion != null
+                ? [{ version: publishedVersion }]
+                : []
+            ).map((v) => (
+              <div className="row tight" key={v.version} style={{ marginBottom: 8 }}>
+                <strong>v{v.version}</strong>
+                <span className="desc">{v.published_at ?? ''}</span>
+                <button
+                  type="button"
+                  className="btn secondary sm"
+                  onClick={() => void inspectVersion(v.version)}
+                >
+                  Inspect
+                </button>
+              </div>
+            ))}
+            {!versions.length && publishedVersion == null && (
+              <p className="hint">No published versions yet.</p>
+            )}
+          </div>
+        )}
+      </Modal>
     </>
   )
 }

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useCatalog } from '../../api/catalog'
 import {
+  CheckField,
+  ChipMulti,
   Field,
   NumberField,
   SelectField,
@@ -8,8 +10,12 @@ import {
   TextField,
   ToggleField,
 } from '../../components/ui'
+import { INTERRUPT_MODES } from '../../api/types.js'
 import { CHOICE_KINDS, LISTEN_TYPES, intentSuggestions } from '../../lib/flowGraph'
 import Connections from './Connections'
+import DecideEditor from './DecideEditor'
+import FlowPolicy from './FlowPolicy'
+import SlotEditor from './SlotEditor'
 import { NODE_COLOR } from './GraphNode'
 import { PanelSection } from './PanelSection'
 import {
@@ -331,25 +337,52 @@ export default function Inspector({
   onCreateEdge,
   onFocusNode,
   onHoverEdge,
+  allowedIntentIds = [],
+  catalogProfileId = '',
+  onCatalogProfileId,
+  profileIds = [],
 }) {
   const { catalog } = useCatalog()
   const nodeIds = doc.nodes.map((n) => n.id)
   const locales = catalog?.tts_locales_v1 ?? ['en-IN']
   const kinds = catalog?.edge_kinds ?? []
+  const interruptModes = catalog?.interrupt_modes?.length
+    ? catalog.interrupt_modes
+    : INTERRUPT_MODES
+  const flowInterruptModes = catalog?.flow_interrupt_modes?.length
+    ? catalog.flow_interrupt_modes
+    : INTERRUPT_MODES
   const promptKeys = Object.keys(doc.prompts ?? {})
   const byId = new Map(doc.nodes.map((n) => [n.id, n]))
   const patchNode = (id, p) =>
     setDoc((d) => ({
       ...d,
-      nodes: d.nodes.map((n) =>
-        n.id === id
-          ? {
-              ...n,
-              ...p,
-            }
-          : n,
-      ),
+      nodes: d.nodes.map((n) => {
+        if (n.id !== id) return n
+        const next = { ...n, ...p }
+        for (const [k, v] of Object.entries(p)) {
+          if (v === undefined) delete next[k]
+        }
+        return next
+      }),
     }))
+  const patchListenPolicy = (n, p) => {
+    const next = { ...(n.listen_policy ?? {}), ...p }
+    for (const [k, v] of Object.entries(next)) {
+      if (v === undefined || v === '') delete next[k]
+    }
+    patchNode(n.id, { listen_policy: Object.keys(next).length ? next : undefined })
+  }
+  const globalEdges = doc.edges.filter((e) => (e.kind ?? '') === 'global')
+  const globalMatchers = [
+    ...new Set(
+      (doc.globals ?? [])
+        .map((id) => doc.edges.find((e) => e.id === id))
+        .filter(Boolean)
+        .map((e) => (e.intent || e.option || '').trim())
+        .filter(Boolean),
+    ),
+  ]
   const patchEdge = (id, p) =>
     setDoc((d) => ({
       ...d,
@@ -553,6 +586,106 @@ export default function Inspector({
             </div>
           )}
         </PanelSection>
+
+        {(['Speak', 'Inform'].includes(n.type) || n.interrupt || n.mandatory_delivery != null) && (
+          <PanelSection id="interrupt" title="Interrupt / Delivery" icon={<IconSliders size={14} />}>
+            <SelectField
+              label="interrupt"
+              value={n.interrupt ?? ''}
+              onChange={(v) =>
+                patchNode(n.id, {
+                  interrupt: v || undefined,
+                  interrupt_after_ms: v === 'after_ms' ? n.interrupt_after_ms : undefined,
+                })
+              }
+              options={interruptModes}
+              emptyLabel="— omit (inherit) —"
+            />
+            {n.interrupt === 'after_ms' && (
+              <NumberField
+                label="interrupt_after_ms"
+                value={n.interrupt_after_ms}
+                onChange={(v) => patchNode(n.id, { interrupt_after_ms: v })}
+              />
+            )}
+            <CheckField
+              label="mandatory_delivery"
+              checked={n.mandatory_delivery === true}
+              onChange={(v) => patchNode(n.id, { mandatory_delivery: v ? true : undefined })}
+              desc="Forces barge off for this line. Cannot combine with interrupt on or after_ms."
+            />
+          </PanelSection>
+        )}
+
+        {(LISTEN_TYPES.includes(n.type) || n.listen_policy) && (
+          <PanelSection id="listen-policy" title="Listen policy" icon={<IconRepeat size={14} />}>
+            <NumberField
+              label="timeout_ms"
+              value={n.listen_policy?.timeout_ms}
+              onChange={(v) => patchListenPolicy(n, { timeout_ms: v })}
+            />
+            <NumberField
+              label="retries"
+              value={n.listen_policy?.retries}
+              onChange={(v) => patchListenPolicy(n, { retries: v })}
+            />
+            <SelectField
+              label="repair_edge_id"
+              value={n.listen_policy?.repair_edge_id ?? ''}
+              onChange={(v) => patchListenPolicy(n, { repair_edge_id: v || undefined })}
+              options={doc.edges.filter((e) => e.from === n.id).map((e) => e.id)}
+              emptyLabel="— none —"
+            />
+            <SelectField
+              label="exhausted_edge_id"
+              value={n.listen_policy?.exhausted_edge_id ?? ''}
+              onChange={(v) => patchListenPolicy(n, { exhausted_edge_id: v || undefined })}
+              options={doc.edges.filter((e) => e.from === n.id).map((e) => e.id)}
+              emptyLabel="— none —"
+              desc="Editing listen_policy does not remove the repair object on this node."
+            />
+          </PanelSection>
+        )}
+
+        {LISTEN_TYPES.includes(n.type) && (
+          <PanelSection id="intents" title="Intents" icon={<IconMessage size={14} />}>
+            <ChipMulti
+              label="allowed_intents"
+              options={[
+                ...new Set([
+                  ...allowedIntentIds,
+                  ...(n.allowed_intents ?? []),
+                ]),
+              ]}
+              selected={n.allowed_intents ?? []}
+              onChange={(v) => patchNode(n.id, { allowed_intents: v.length ? v : undefined })}
+              desc="Catalog ids from the selected profile. Global-scope intents stay out of this list."
+            />
+            <ChipMulti
+              label="global_intents"
+              options={[...new Set([...globalMatchers, ...(n.global_intents ?? [])])]}
+              selected={n.global_intents ?? []}
+              onChange={(v) => patchNode(n.id, { global_intents: v.length ? v : undefined })}
+              desc="Matchers of edges listed on the flow globals. Empty until you opt this listen step in."
+            />
+          </PanelSection>
+        )}
+
+        {n.type === 'ListenSlot' && (
+          <PanelSection id="slot" title="Slot" icon={<IconSliders size={14} />}>
+            <SlotEditor slot={n.slot} onChange={(slot) => patchNode(n.id, { slot })} />
+          </PanelSection>
+        )}
+
+        {n.type === 'Decide' && (
+          <PanelSection id="decide" title="Decide" icon={<IconGear size={14} />}>
+            <DecideEditor
+              node={n}
+              doc={doc}
+              onChange={(decide) => patchNode(n.id, { decide })}
+            />
+          </PanelSection>
+        )}
 
         {showPrompt && (
           <PanelSection
@@ -821,6 +954,57 @@ export default function Inspector({
           placeholder={bindingIds[0] ?? 'binding id'}
           desc={`Bindings this flow may Inform from. Available: ${bindingIds.join(', ') || 'none'}`}
         />
+
+        <SelectField
+          label="Intent catalog profile"
+          value={catalogProfileId}
+          onChange={(v) => onCatalogProfileId?.(v)}
+          options={profileIds}
+          desc="allowed_intents chips come from this profile's catalog. Default is the first answer pin for this flow."
+        />
+      </PanelSection>
+
+      <PanelSection
+        id="globals"
+        title="Always-on globals"
+        icon={<IconLink size={14} />}
+        meta={(doc.globals ?? []).length}
+      >
+        <p className="desc" style={{ marginTop: 0 }}>
+          Always available on opted-in listen steps — not unused edge kinds. An edge must be
+          kind=global and carry an intent or option.
+        </p>
+        <div className="chips">
+        {globalEdges.map((e) => {
+          const matcher = (e.intent || e.option || '').trim() || '(needs intent or option)'
+          const on = (doc.globals ?? []).includes(e.id)
+          return (
+            <span
+              key={e.id}
+              className={`chip ${on ? 'on' : ''}`}
+              onClick={() =>
+                setDoc((d) => {
+                  const cur = d.globals ?? []
+                  const next = on ? cur.filter((id) => id !== e.id) : [...cur, e.id]
+                  const copy = { ...d, globals: next }
+                  if (!next.length) delete copy.globals
+                  return copy
+                })
+              }
+              title={matcher}
+            >
+              {e.id} · {matcher}
+            </span>
+          )
+        })}
+        </div>
+        {!globalEdges.length && (
+          <p className="desc">No kind=global edges yet. Draw one, then list it here.</p>
+        )}
+      </PanelSection>
+
+      <PanelSection id="flow-policy" title="Conversation policy" icon={<IconGear size={14} />}>
+        <FlowPolicy doc={doc} setDoc={setDoc} interruptModes={flowInterruptModes} />
       </PanelSection>
 
       <PanelSection

@@ -8,7 +8,12 @@
  * Every rule below maps 1:1 to a check in the Go validator; keep them in sync.
  */
 
-import { FLOW_SCHEMA_ID, SLOT_VALIDATORS, WELL_KNOWN_SLOTS } from '../api/types.js'
+import {
+  FLOW_INTERRUPT_MODES,
+  FLOW_SCHEMA_ID,
+  SLOT_VALIDATORS,
+  WELL_KNOWN_SLOTS,
+} from '../api/types.js'
 const TOOL_VERBS = ['transfer', 'hangup']
 export function validateFlow(doc, catalog) {
   const issues = []
@@ -182,7 +187,12 @@ export function validateFlow(doc, catalog) {
           id,
         )
       else if (repairs > 1)
-        err(`${n.type} node "${id}" has ${repairs} "repair" edges; exactly one is legal`, id)
+        // Live inbound publishes with several listen repair edges (server 200).
+        // Keep the note, but do not block Publish — the kernel does not.
+        warn(
+          `${n.type} node "${id}" has ${repairs} "repair" edges; the runtime uses one — extra edges are ignored`,
+          id,
+        )
       else if (!hasPolicy && repairs === 0)
         warn(
           `${n.type} node "${id}" has no repair policy — an unclear reply leaves the bot silent`,
@@ -224,6 +234,9 @@ export function validateFlow(doc, catalog) {
         }
       }
     }
+    const cls = (spec.class ?? '').trim()
+    if (cls && cls !== 'none' && cls !== 'confidential')
+      err(`ListenSlot "${id}" slot.class must be none|confidential`, id)
   }
 
   const whenOps = (w) => {
@@ -392,6 +405,67 @@ export function validateFlow(doc, catalog) {
   }
   if (transferTools > 0 && (doc.matrix ?? []).length === 0)
     err('a transfer Tool requires a non-empty matrix')
+
+  /* ---- conversation_policy + node interrupt (internal/flow/policy.go) ---- */
+  const ge0 = (v) => v != null && Number(v) < 0
+  const irModes = FLOW_INTERRUPT_MODES
+  const pol = doc.conversation_policy
+  if (pol && typeof pol === 'object') {
+    const ir = pol.interruption ?? {}
+    for (const key of ['mode', 'welcome_mode']) {
+      const v = (ir[key] ?? '').trim()
+      if (v && !irModes.includes(v))
+        err(`conversation_policy.interruption.${key} must be inherit|off|on|after_ms`)
+    }
+    if ((ir.mode === 'after_ms' || ir.welcome_mode === 'after_ms') && ir.welcome_grace_ms == null)
+      err('conversation_policy.interruption.welcome_grace_ms is required when mode or welcome_mode is after_ms')
+    for (const [key, val] of [
+      ['welcome_grace_ms', ir.welcome_grace_ms],
+      ['min_barge_chars', ir.min_barge_chars],
+      ['min_barge_ms', ir.min_barge_ms],
+      ['cooldown_ms', ir.cooldown_ms],
+    ]) {
+      if (ge0(val)) err(`conversation_policy.interruption.${key} must be >= 0`)
+    }
+    const listen = pol.listen ?? {}
+    if (ge0(listen.no_input_timeout_ms))
+      err('conversation_policy.listen.no_input_timeout_ms must be >= 0')
+    if (ge0(listen.retry_budget)) err('conversation_policy.listen.retry_budget must be >= 0')
+    const ue = listen.utterance_endpointing ?? {}
+    for (const key of ['end_silence_ms', 'min_speech_ms', 'max_hold_ms', 'barge_silence_ms']) {
+      if (ge0(ue[key])) err(`conversation_policy.listen.utterance_endpointing.${key} must be >= 0`)
+    }
+    const failMax = pol.failure?.safe_retry_max
+    if (failMax != null && (failMax < 0 || failMax > 3))
+      err('conversation_policy.failure.safe_retry_max must be 0–3')
+  }
+
+  for (const n of doc.nodes) {
+    const id = n.id?.trim()
+    if (!id) continue
+    const mode = (n.interrupt ?? '').trim()
+    if (mode && !irModes.includes(mode))
+      err(`node "${id}" interrupt must be inherit|off|on|after_ms`, id)
+    if (mode === 'after_ms') {
+      if (n.interrupt_after_ms == null)
+        err(`node "${id}" needs interrupt_after_ms when interrupt is after_ms`, id)
+      else if (ge0(n.interrupt_after_ms))
+        err(`node "${id}" interrupt_after_ms must be >= 0`, id)
+    } else if (n.interrupt_after_ms != null) {
+      err(`node "${id}" interrupt_after_ms is only valid when interrupt is after_ms`, id)
+    }
+    const lp = n.listen_policy
+    if (lp) {
+      if (ge0(lp.timeout_ms)) err(`node "${id}" listen_policy.timeout_ms must be >= 0`, id)
+      if (ge0(lp.retries)) err(`node "${id}" listen_policy.retries must be >= 0`, id)
+    }
+    const mandatory = n.mandatory_delivery === true
+    const interruptOn = mode === 'on' || mode === 'after_ms'
+    if (mandatory && interruptOn)
+      err(`node "${id}" mandatory_delivery cannot combine with interrupt on|after_ms`, id)
+    if (n.type === 'Tool' && interruptOn)
+      err(`Tool node "${id}" cannot publish with interrupt on|after_ms`, id)
+  }
 
   /* ---- warnings: unreachable nodes (server does not check; operators care) ---- */
   if (entryId && byId.has(entryId)) {

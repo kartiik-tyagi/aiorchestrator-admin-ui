@@ -60,11 +60,17 @@ export const WELL_KNOWN_SLOTS = [
   'transfer_number',
 ]
 
-/** Node interrupt modes — copy of Go; unused in 1.3 UI, catalog later. */
-export const INTERRUPT_MODES = ['inherit', 'barge_in', 'hotword', 'none']
+/** Node + flow interrupt modes — internal/flow/policy.go (catalog interrupt_modes). */
+export const INTERRUPT_MODES = ['inherit', 'off', 'on', 'after_ms']
+
+/** Same closed set as INTERRUPT_MODES; flow conversation_policy allows inherit. */
+export const FLOW_INTERRUPT_MODES = INTERRUPT_MODES
 
 /** Profile-level barge modes — no inherit (internal/profile/conversation_policy.go). */
 export const PROFILE_INTERRUPT_MODES = ['off', 'on', 'after_ms']
+
+/** ListenSlot attribute class — internal/flow/slot.go. */
+export const SLOT_CLASSES = ['none', 'confidential']
 
 /** Intent scopes — copy of internal/profile/intent_catalog.go until catalog grows a key. */
 export const INTENT_SCOPES = ['global', 'hub', 'in_room']
@@ -322,6 +328,43 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {number} [max_retries]
  * @property {string} [unclear_prompt_ref]
  *
+ * @typedef {Object} FlowListenPolicy
+ * @property {number} [timeout_ms]
+ * @property {number} [retries]
+ * @property {string} [repair_edge_id]
+ * @property {string} [exhausted_edge_id]
+ *
+ * @typedef {Object} FlowSlot
+ * @property {string} key
+ * @property {string} validator   nonempty | enum | regex
+ * @property {string[]} [enum]
+ * @property {string} [pattern]
+ * @property {boolean} [confirm]
+ * @property {boolean} [redact]
+ * @property {string} [class]     none | confidential
+ *
+ * @typedef {Object} FlowDecideWhen
+ * @property {string} slot
+ * @property {string} [eq]
+ * @property {string[]} [in]
+ * @property {boolean} [exists]
+ *
+ * @typedef {Object} FlowDecideRule
+ * @property {FlowDecideWhen} when
+ * @property {string} edge_id
+ *
+ * @typedef {Object} FlowDecide
+ * @property {FlowDecideRule[]} rules
+ * @property {string} else_edge_id
+ *
+ * @typedef {Object} FlowConversationPolicy
+ * @property {{mode?: string, welcome_mode?: string, welcome_grace_ms?: number,
+ *   min_barge_chars?: number, min_barge_ms?: number, cooldown_ms?: number}} [interruption]
+ * @property {{no_input_timeout_ms?: number, retry_budget?: number, feed_during_speak?: boolean,
+ *   utterance_endpointing?: {enabled?: boolean, end_silence_ms?: number, min_speech_ms?: number,
+ *   max_hold_ms?: number, barge_silence_ms?: number}}} [listen]
+ * @property {{safe_retry_max?: number}} [failure]
+ *
  * @typedef {Object} FlowNode
  * @property {string} id
  * @property {string} type          one of NODE_TYPES
@@ -329,11 +372,15 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} [binding_ref] required on Inform
  * @property {string} [tool]        required on Tool: transfer | hangup
  * @property {FlowNodeRepair} [repair]
- * @property {*}      [slot]
- * @property {*}      [decide]
+ * @property {FlowSlot} [slot]
+ * @property {FlowDecide} [decide]
  * @property {string[]} [global_intents]
  * @property {string[]} [allowed_intents]
  * @property {string} [matrix_intent]
+ * @property {string} [interrupt]            inherit | off | on | after_ms
+ * @property {number} [interrupt_after_ms]   only when interrupt is after_ms
+ * @property {FlowListenPolicy} [listen_policy]
+ * @property {boolean} [mandatory_delivery]
  *
  * @typedef {Object} FlowEdge
  * @property {string} id
@@ -365,6 +412,7 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {MatrixRow[]} matrix
  * @property {string[]} binding_refs
  * @property {string[]} [globals]
+ * @property {FlowConversationPolicy} [conversation_policy]  omit = inherit profile
  * @property {FlowCX} [cx]  rejected by the kernel when non-empty — do not send; layout is localStorage only
  *
  * @typedef {Object} FlowSummary
