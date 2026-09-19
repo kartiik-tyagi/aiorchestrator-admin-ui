@@ -139,9 +139,9 @@ bottom edges of each node.
 ### Canvas layout persistence
 
 `coral.flow.v1` has no node coordinates. The builder auto-lays out by BFS depth from the Entry node,
-then persists positions into `doc.cx.layout`. `cx` is declared in the Go `Document` struct but never
-read by the runtime, and the JSON decoder ignores unknown fields — so layout round-trips through draft
-save and publish without affecting validation or call behaviour.
+then persists positions in this browser only (`localStorage` key `orch_cc_layout:<flowId>`). The
+kernel rejects any non-empty `cx` (`validateCXRejected`). Save and Publish never write `cx`. A second
+browser on the same flow auto-lays out.
 
 ---
 

@@ -323,7 +323,7 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {MatrixRow[]} matrix
  * @property {string[]} binding_refs
  * @property {string[]} [globals]
- * @property {FlowCX} [cx]  canvas layout; declared in Go but never read by the runtime
+ * @property {FlowCX} [cx]  rejected by the kernel when non-empty — do not send; layout is localStorage only
  *
  * @typedef {Object} FlowSummary
  * @property {string} id

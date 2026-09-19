@@ -15,7 +15,13 @@ import { api } from '../api/client'
 import { useToast } from '../components/ui'
 import { localeGaps, validateFlow } from '../lib/flowValidate'
 import { SECONDARY_KINDS, defaultEdgeKind, edgeLabel, nextEdgeId } from '../lib/flowGraph'
-import { resolveLayout, withLayout } from '../lib/layout'
+import {
+  autoLayout,
+  remapLocalLayout,
+  resolveLayout,
+  withoutCx,
+  writeLocalLayout,
+} from '../lib/layout'
 import FlowEdge from './builder/FlowEdge'
 import GraphNode, { NODE_COLOR } from './builder/GraphNode'
 import Inspector from './builder/Inspector'
@@ -281,8 +287,8 @@ function BuilderInner() {
         api.getFlow(flowId).catch(() => null),
       ])
       const d = draft?.doc ?? emptyDoc()
-      setDocState(d)
-      setLayout(resolveLayout(d))
+      setLayout(resolveLayout(d, flowId))
+      setDocState(withoutCx(d))
       setBindingIds((binds.bindings ?? []).map((b) => b.id))
       // An unpublished flow reports current_version 0, not null.
       setPublishedVersion(meta?.current_version > 0 ? meta.current_version : null)
@@ -462,7 +468,17 @@ function BuilderInner() {
       if (c.type === 'position' && c.position) moved[c.id] = c.position
       else if (c.type === 'dimensions' && c.dimensions) sized[c.id] = c.dimensions
     }
-    if (Object.keys(moved).length) setLayout((l) => ({ ...l, ...moved }))
+    if (Object.keys(moved).length) {
+      setLayout((l) => {
+        const next = { ...l, ...moved }
+        writeLocalLayout(
+          flowId,
+          next,
+          docRef.current.nodes.map((n) => n.id),
+        )
+        return next
+      })
+    }
     if (Object.keys(sized).length) {
       setMeasured((m) => {
         const same = Object.entries(sized).every(
@@ -471,7 +487,7 @@ function BuilderInner() {
         return same ? m : { ...m, ...sized }
       })
     }
-  }, [])
+  }, [flowId])
 
   const dragFrom = useRef(null)
   const onNodeDragStart = useCallback(
@@ -483,7 +499,7 @@ function BuilderInner() {
   )
   const onNodeDragStop = useCallback((_, n) => {
     const p = dragFrom.current
-    // Moving a node is an edit: it changes cx.layout, and was being lost on
+    // Moving a node is an edit: it changes local layout, and was being lost on
     // navigation because nothing marked the flow unsaved.
     if (
       p &&
@@ -626,7 +642,11 @@ function BuilderInner() {
       entry_node_id: type === 'Entry' && !cur.entry_node_id ? id : cur.entry_node_id,
     }))
     setDirty(true)
-    setLayout((l) => ({ ...l, [id]: pos }))
+    setLayout((l) => {
+      const next = { ...l, [id]: pos }
+      writeLocalLayout(flowId, next, [...docRef.current.nodes.map((n) => n.id), id])
+      return next
+    })
     setSelNodeId(id)
     setSelEdgeId(null)
     // Bring it into view if it landed outside.
@@ -661,6 +681,7 @@ function BuilderInner() {
       const { [oldId]: p, ...rest } = l
       return { ...rest, [newId]: p }
     })
+    remapLocalLayout(flowId, oldId, newId)
     setMeasured((m) => {
       if (!m[oldId]) return m
       const { [oldId]: s, ...rest } = m
@@ -670,11 +691,13 @@ function BuilderInner() {
   }
   const relayout = () => {
     record(false)
-    const fresh = resolveLayout({
-      ...doc,
-      cx: undefined,
-    })
+    const fresh = autoLayout(withoutCx(doc))
     setLayout(fresh)
+    writeLocalLayout(
+      flowId,
+      fresh,
+      doc.nodes.map((n) => n.id),
+    )
     setDirty(true)
     window.requestAnimationFrame(() => void fitView({ padding: 0.2, maxZoom: 1, duration: 250 }))
     toast.ok('Re-laid out from the Entry node')
@@ -682,10 +705,18 @@ function BuilderInner() {
 
   /* -------------------------------------------------------- save / publish */
 
-  const docForWire = () => withLayout(doc, layoutRef.current)
+  const persistLayout = (layout) =>
+    writeLocalLayout(
+      flowId,
+      layout,
+      (docRef.current.nodes ?? []).map((n) => n.id),
+    )
+
+  const docForWire = () => withoutCx(doc)
   const saveDraft = async () => {
     setBusy(true)
     try {
+      persistLayout(layoutRef.current)
       await api.putFlowDraft(flowId, docForWire())
       setDirty(false)
       toast.ok('Draft saved')
@@ -702,6 +733,7 @@ function BuilderInner() {
     }
     setBusy(true)
     try {
+      persistLayout(layoutRef.current)
       const wire = docForWire()
       await api.putFlowDraft(flowId, wire)
       const got = await api.publishFlow(flowId, wire)
@@ -721,8 +753,8 @@ function BuilderInner() {
   }
   const replaceDoc = (next) => {
     record(false)
-    setDocState(next)
-    setLayout(resolveLayout(next))
+    setLayout(resolveLayout(next, flowId))
+    setDocState(withoutCx(next))
     setSelNodeId(null)
     setSelEdgeId(null)
     setDirty(true)
@@ -906,9 +938,9 @@ function BuilderInner() {
           <div className="card">
             <h2>Raw document</h2>
             <p className="hint">
-              The full <code>coral.flow.v1</code> document. Canvas positions live under
-              <code> cx.layout</code> — a field the Go struct declares but the runtime never reads,
-              so it round-trips safely through draft and publish.
+              The full <code>coral.flow.v1</code> document. Canvas positions are not part of the
+              flow — they stay in this browser only. The kernel rejects a non-empty <code>cx</code>;
+              Save and Publish strip it even if it is pasted here.
             </p>
             <textarea
               rows={30}

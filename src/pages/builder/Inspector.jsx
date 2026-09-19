@@ -383,14 +383,6 @@ export default function Inspector({
         from: e.from === oldId ? id : e.from,
         to: e.to === oldId ? id : e.to,
       })),
-      cx: d.cx?.layout
-        ? {
-            ...d.cx,
-            layout: Object.fromEntries(
-              Object.entries(d.cx.layout).map(([k, v]) => [k === oldId ? id : k, v]),
-            ),
-          }
-        : d.cx,
     }))
   }
 

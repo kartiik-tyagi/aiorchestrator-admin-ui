@@ -1,23 +1,74 @@
 /**
  * Auto-layout for the graph canvas.
  *
- * coral.flow.v1 carries no node coordinates, so a freshly loaded flow has to be
- * placed somewhere sensible. We do a layered (Sugiyama-ish) pass: BFS depth from
- * the Entry node gives the ROW, and order within that depth spreads across the
- * row. Good enough to read a 19-node/65-edge desk flow at a glance, no extra dep.
+ * coral.flow.v1 carries no node coordinates. The kernel rejects any non-empty
+ * `cx` (CC.2 / validateCXRejected). Positions live only in this browser under
+ * localStorage key orch_cc_layout:<flowId>.
  *
- * Vertical: a conversation reads top-to-bottom, which matches how the flowcharts
- * in docs/06 are drawn and keeps deep flows inside the viewport width.
- *
- * Once placed, positions are persisted into doc.cx.layout — `cx` is declared in
- * the Go Document but never read by the runtime, so it round-trips through draft
- * save and publish without affecting validation or behaviour.
+ * Vertical: a conversation reads top-to-bottom. BFS depth from Entry is the
+ * row; siblings spread across it. Good enough to read a large desk flow.
  */
 
-const COL_W = 240 // horizontal gap between siblings at the same depth
-const ROW_H = 150 // vertical gap between depths
+const COL_W = 240
+const ROW_H = 150
 const PAD_X = 60
 const PAD_Y = 60
+
+export function layoutStorageKey(flowId) {
+  return `orch_cc_layout:${flowId}`
+}
+
+export function withoutCx(doc) {
+  if (!doc || typeof doc !== 'object') return doc
+  const { cx: _cx, ...rest } = doc
+  return rest
+}
+
+function sanitizeLayout(layout, liveIds) {
+  const live = liveIds ? new Set(liveIds) : null
+  const out = {}
+  if (!layout || typeof layout !== 'object') return out
+  for (const [id, p] of Object.entries(layout)) {
+    if (live && !live.has(id)) continue
+    if (p && typeof p.x === 'number' && typeof p.y === 'number') {
+      out[id] = {
+        x: Math.round(p.x),
+        y: Math.round(p.y),
+      }
+    }
+  }
+  return out
+}
+
+export function readLocalLayout(flowId) {
+  if (!flowId) return {}
+  try {
+    const raw = localStorage.getItem(layoutStorageKey(flowId))
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function writeLocalLayout(flowId, layout, liveIds) {
+  if (!flowId) return
+  try {
+    localStorage.setItem(layoutStorageKey(flowId), JSON.stringify(sanitizeLayout(layout, liveIds)))
+  } catch {
+    /* private mode or quota — the document save must still succeed */
+  }
+}
+
+export function remapLocalLayout(flowId, oldId, newId) {
+  if (!flowId || !oldId || !newId || oldId === newId) return
+  const cur = readLocalLayout(flowId)
+  if (!cur[oldId]) return
+  const { [oldId]: p, ...rest } = cur
+  writeLocalLayout(flowId, { ...rest, [newId]: p })
+}
+
 export function autoLayout(doc) {
   const ids = doc.nodes.map((n) => n.id).filter(Boolean)
   if (!ids.length) return {}
@@ -28,7 +79,6 @@ export function autoLayout(doc) {
   }
   const entry = doc.entry_node_id && ids.includes(doc.entry_node_id) ? doc.entry_node_id : ids[0]
 
-  // BFS depth from entry. Back/retry edges can revisit, so first visit wins.
   const depth = new Map([[entry, 0]])
   const queue = [entry]
   while (queue.length) {
@@ -42,7 +92,6 @@ export function autoLayout(doc) {
     }
   }
 
-  // Anything unreachable is parked in a trailing column so it stays visible.
   const maxDepth = Math.max(0, ...depth.values())
   for (const id of ids) if (!depth.has(id)) depth.set(id, maxDepth + 1)
   const byDepth = new Map()
@@ -54,7 +103,6 @@ export function autoLayout(doc) {
   const pos = {}
   const widest = Math.max(...[...byDepth.values()].map((c) => c.length))
   for (const [d, members] of byDepth) {
-    // Centre each depth horizontally so the graph reads down a spine.
     const offset = ((widest - members.length) * COL_W) / 2
     members.forEach((i, idx) => {
       pos[i] = {
@@ -66,42 +114,32 @@ export function autoLayout(doc) {
   return pos
 }
 
-/** Stored layout for nodes that still exist, auto-placing anything new. */
-export function resolveLayout(doc) {
-  const stored = doc.cx?.layout ?? {}
-  const ids = new Set(doc.nodes.map((n) => n.id))
+/**
+ * localStorage first, then leftover doc.cx.layout (migrate once if LS empty),
+ * then auto-layout for missing ids. Pass ignoreStored for Auto-layout.
+ */
+export function resolveLayout(doc, flowId, opts = {}) {
+  const ids = new Set((doc?.nodes ?? []).map((n) => n.id).filter(Boolean))
+  if (opts.ignoreStored) {
+    return autoLayout(withoutCx(doc) ?? doc)
+  }
+  let stored = sanitizeLayout(readLocalLayout(flowId), ids)
+  const fromCx = sanitizeLayout(doc?.cx?.layout, ids)
+  if (!Object.keys(stored).length && Object.keys(fromCx).length) {
+    writeLocalLayout(flowId, fromCx, ids)
+    stored = fromCx
+  }
   const known = {}
   let missing = false
   for (const id of ids) {
-    const p = stored[id]
-    if (p && typeof p.x === 'number' && typeof p.y === 'number') known[id] = p
+    if (stored[id]) known[id] = stored[id]
+    else if (fromCx[id]) known[id] = fromCx[id]
     else missing = true
   }
   if (!missing && Object.keys(known).length === ids.size) return known
-  const auto = autoLayout(doc)
-  // Keep hand-placed nodes, auto-place the rest.
+  const auto = autoLayout(withoutCx(doc) ?? doc)
   return {
     ...auto,
     ...known,
-  }
-}
-export function withLayout(doc, layout) {
-  const rounded = {}
-  // Only nodes that still exist — deleted and renamed ids otherwise pile up in
-  // cx.layout forever, one stale entry per edit.
-  const live = new Set(doc.nodes.map((n) => n.id))
-  for (const [id, p] of Object.entries(layout)) {
-    if (!live.has(id)) continue
-    rounded[id] = {
-      x: Math.round(p.x),
-      y: Math.round(p.y),
-    }
-  }
-  return {
-    ...doc,
-    cx: {
-      ...(doc.cx ?? {}),
-      layout: rounded,
-    },
   }
 }
