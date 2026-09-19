@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useCatalog } from '../api/catalog'
 import { api, getTenant } from '../api/client'
 import {
@@ -18,6 +18,7 @@ import {
   useAsync,
   useToast,
 } from '../components/ui'
+import { setDirtyGuard } from '../lib/dirtyGuard'
 import { validateProfile } from '../lib/profileValidate'
 import Industrial from './profile/Industrial'
 /**
@@ -94,6 +95,9 @@ export default function Profiles() {
   const [fromDraft, setFromDraft] = useState(false)
   const [serverIssues, setServerIssues] = useState([])
   const [versions, setVersions] = useState([])
+  const [dirty, setDirty] = useState(false)
+  const dirtyRef = useRef(false)
+  dirtyRef.current = dirty
   const locales = catalog?.tts_locales_v1 ?? []
   const localIssues = useMemo(() => (doc ? validateProfile(doc, gateways) : []), [doc, gateways])
   const issues = useMemo(
@@ -107,6 +111,7 @@ export default function Profiles() {
 
   /** Shallow-merge a patch into the document. */
   const patch = useCallback((p) => {
+    setDirty(true)
     setDoc((d) =>
       d
         ? {
@@ -119,6 +124,7 @@ export default function Profiles() {
 
   /** Merge into a nested object section without clobbering sibling keys. */
   const patchIn = useCallback((key, p) => {
+    setDirty(true)
     setDoc((d) =>
       d
         ? {
@@ -138,6 +144,7 @@ export default function Profiles() {
       setFromDraft(false)
       setServerIssues([])
       setVersions([])
+      setDirty(false)
       try {
         const vers = await api.listProfileVersions(id).catch(() => ({ versions: [] }))
         setVersions(vers.versions ?? [])
@@ -182,6 +189,35 @@ export default function Profiles() {
     const only = list.data?.profiles
     if (!selected && only?.length === 1) void loadProfile(only[0].id)
   }, [list.data, selected, loadProfile])
+  useEffect(() => {
+    setDirtyGuard(dirty, 'profile')
+    return () => setDirtyGuard(false)
+  }, [dirty])
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!dirtyRef.current) return
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    const onClick = (e) => {
+      if (!dirtyRef.current || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+        return
+      const a = e.target instanceof Element ? e.target.closest('a[href]') : null
+      if (!a || a.target === '_blank') return
+      const url = new URL(a.href, window.location.href)
+      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return
+      if (!window.confirm('This profile has unsaved changes. Leave without saving?')) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    document.addEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload)
+      document.removeEventListener('click', onClick, true)
+    }
+  }, [])
   const createProfile = async () => {
     const id = newId.trim()
     if (!id) {
@@ -214,6 +250,7 @@ export default function Profiles() {
     try {
       await api.putProfileDraft(selected, doc)
       setFromDraft(true)
+      setDirty(false)
       toast.ok('Draft saved — not live until Publish')
     } catch (e) {
       toast.fail(e, 'Save draft')
@@ -253,6 +290,7 @@ export default function Profiles() {
       const got = v.document ?? v.doc
       if (!got) throw new Error('version had no document')
       setDoc({ ...got, id: selected })
+      setDirty(true)
       toast.ok(`Loaded version ${ver} into the form — Save draft to keep it`)
     } catch (e) {
       toast.fail(e, 'Load version')
@@ -268,7 +306,8 @@ export default function Profiles() {
     try {
       const got = await api.publishProfile(selected, doc)
       setVersion(got.version)
-      toast.ok(`Published ${selected} version ${got.version}`)
+      setDirty(false)
+      toast.ok(`Published ${selected} version ${got.version}. Next: pin this profile to a published flow.`)
       void reloadStatus()
     } catch (e) {
       toast.fail(e, 'Publish profile')
@@ -308,6 +347,7 @@ This removes the profile and all its published ` +
     try {
       const parsed = JSON.parse(rawText)
       setDoc(parsed)
+      setDirty(true)
       setRawErr('')
       setRawMode(false)
       toast.ok('Applied JSON to the form')

@@ -86,6 +86,10 @@ export default function Dashboard() {
           Live view of the orchestrator this console is pointed at. Everything here is read from the
           Control API — configuration lives in Postgres, never in files.
         </p>
+        <p className="hint">
+          New to this console? Do 1–5 in order.{' '}
+          <Link to="/CC/admin/tutorial">Open the tutorial</Link>.
+        </p>
       </div>
 
       {error != null && (

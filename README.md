@@ -26,10 +26,11 @@ The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http
 Nine domains, all through the Control API. Configuration lives in Postgres — migrations create schema
 only and never insert data, so a fresh database is empty until something writes to it.
 
-The sidebar is ordered as the configuration order — work top to bottom. A hidden walkthrough for a
-blank database lives at **`/CC/admin/tutorial`**; it is reachable by typing the URL only, and is deliberately
-not linked from the sidebar or any component. The order is defined once in `src/lib/setupSteps.js`,
-which the sidebar and the dashboard checklist both read.
+The sidebar is ordered as the configuration order — work top to bottom. A first-run walkthrough lives
+at **`/CC/admin/tutorial`** (also linked from the Call Center dashboard). The order is defined once in
+`src/lib/setupSteps.js`, which the sidebar and the dashboard checklist both read. New profiles start
+with an empty intent catalog. FAQ bindings need retrieve keys (intents/aliases) or they only match
+questions. Canvas layout is `localStorage` only — never write `cx` on the flow.
 
 | # | Screen | Domain | Endpoints |
 |---|---|---|

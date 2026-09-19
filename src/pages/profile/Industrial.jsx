@@ -86,6 +86,9 @@ export default function Industrial({ doc, patch, patchIn, catalog }) {
         <p className="hint">
           Intent catalog — ids must match listen edges on the flow. Scope and action are closed lists.
         </p>
+        {!catalogRows.length && (
+          <p className="hint">The bot can only follow edges you drew.</p>
+        )}
         <table className="plain">
           <thead>
             <tr>

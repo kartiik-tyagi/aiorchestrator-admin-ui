@@ -109,6 +109,13 @@ export const FIELD_GUIDE = [
             what: 'metadata.family. The only runtime check is a legacy one comparing it to "contact-agent" in tenant_engines.go — irrelevant to a voice desk.',
             plain: 'A grouping tag. Safe to leave blank.',
           },
+          {
+            name: 'intent_catalog',
+            req: 'optional',
+            what: 'Ids the agent turn may choose. Empty means the bot can only follow edges you drew.',
+            plain:
+              'Leave empty on a new desk. Do not paste a production catalog into a demo profile.',
+          },
         ],
       },
       {
@@ -485,6 +492,18 @@ export const FIELD_GUIDE = [
             what: 'Any binding used by an Inform node must also appear in this list, or publish fails.',
             plain:
               'A declaration of which knowledge sources this flow may use. Catches everyone once: pointing an Inform node at a binding is not enough, it has to be listed here too.',
+          },
+          {
+            name: 'globals',
+            req: 'optional',
+            what: 'Edge ids of kind=global that are armed. Empty while global edges exist means they never fire.',
+            plain: 'Global edges exist but are not armed on the flow until you list them here.',
+          },
+          {
+            name: 'Canvas layout',
+            req: 'optional',
+            what: 'Stored in this browser (localStorage). A non-empty cx on the document is rejected at validate.',
+            plain: 'Where boxes sit on the canvas. Never part of the published flow.',
           },
         ],
       },

@@ -134,7 +134,8 @@ export default function Flows() {
           <p>
             A flow is the conversation graph — the law the bot follows. Drafts are mutable;
             published versions are immutable and content-hashed, and only a published version can be
-            pinned to answer calls.
+            pinned to answer calls. Interrupt, listen policy, globals and Decide are added in the
+            builder — this starter graph has no canvas layout in the document.
           </p>
         </div>
         <div className="page-actions">

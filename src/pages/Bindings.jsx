@@ -451,6 +451,14 @@ Inform nodes using it will stop answering immediately. ` +
               }
             >
               {!entries.length && <Empty>No entries yet.</Empty>}
+              {!!entries.length &&
+                entries.every(
+                  (e) => !(e.intents ?? []).length && !(e.aliases ?? []).length,
+                ) && (
+                  <p className="hint">
+                    FAQ will only match questions, not intent/product.
+                  </p>
+                )}
               {entries.map((e, i) => (
                 <details className="section" key={i}>
                   <summary>

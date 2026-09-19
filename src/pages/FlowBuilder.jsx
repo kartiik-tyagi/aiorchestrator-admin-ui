@@ -13,6 +13,7 @@ import '@xyflow/react/dist/style.css'
 import { useCatalog } from '../api/catalog'
 import { api } from '../api/client'
 import { Modal, useToast } from '../components/ui'
+import { setDirtyGuard } from '../lib/dirtyGuard'
 import { localeGaps, validateFlow } from '../lib/flowValidate'
 import { SECONDARY_KINDS, defaultEdgeKind, edgeLabel, nextEdgeId } from '../lib/flowGraph'
 import {
@@ -325,6 +326,10 @@ function BuilderInner() {
   useEffect(() => {
     void load()
   }, [load])
+  useEffect(() => {
+    setDirtyGuard(dirty, 'flow')
+    return () => setDirtyGuard(false)
+  }, [dirty])
   useEffect(() => {
     if (showJson) setJsonText(JSON.stringify(doc, null, 2))
   }, [showJson, doc])

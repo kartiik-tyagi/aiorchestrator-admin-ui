@@ -1001,6 +1001,9 @@ export default function Inspector({
         {!globalEdges.length && (
           <p className="desc">No kind=global edges yet. Draw one, then list it here.</p>
         )}
+        {!!globalEdges.length && !(doc.globals ?? []).length && (
+          <p className="desc">Global edges exist but are not armed on the flow.</p>
+        )}
       </PanelSection>
 
       <PanelSection id="flow-policy" title="Conversation policy" icon={<IconGear size={14} />}>

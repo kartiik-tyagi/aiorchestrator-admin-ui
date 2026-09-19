@@ -9,9 +9,8 @@ import { FIELD_GUIDE, REQ_LABEL } from '../lib/fieldGuide'
 /**
  * Hidden walkthrough at /CC/admin/tutorial (legacy /tutorial redirects here).
  *
- * Deliberately not linked from the sidebar or any component — reachable only by
- * typing the URL. If you ever want it discoverable, add it to SETUP_STEPS or the
- * nav array in CcShell; nothing else needs to change.
+ * Linked from the dashboard first-run strip. Canvas layout is browser
+ * localStorage only — never write `cx` on the flow document.
  *
  * It shows live status per step, so it doubles as a progress tracker on a fresh
  * database rather than being static prose.
@@ -237,6 +236,11 @@ export default function Tutorial() {
           <Link to="/CC/admin/profiles">Profiles</Link> → enter an id (e.g. <code>coral-voice-desk</code>) →
           Create. Then fill in the form and hit <strong>Publish version</strong>.
         </p>
+        <p>
+          New profiles are <code>product: call_center</code> with an empty intent catalog — the bot
+          can only follow edges you drew until you add intents. Do not paste a production catalog
+          into a demo.
+        </p>
         <p>The minimum that will publish:</p>
         <ul style={{ margin: '0.3rem 0 0.7rem 1.1rem', color: 'var(--muted)', fontSize: 13 }}>
           <li>
@@ -267,8 +271,9 @@ export default function Tutorial() {
         <p>
           <Link to="/CC/admin/bindings">Bindings</Link> → id, kind <code>knowledge</code>, mode{' '}
           <code>inline_faq</code> → add entries. Each entry has questions to match on and answer
-          text per locale. Do this <em>before</em> step 4, because the flow has to reference a
-          binding that already exists.
+          text per locale. Put intent/product/aliases on each entry — without retrieve keys the FAQ
+          will only match questions. Do this <em>before</em> step 4, because the flow has to
+          reference a binding that already exists.
         </p>
       </Step>
 
@@ -276,7 +281,8 @@ export default function Tutorial() {
         <p style={{ marginTop: 0 }}>
           <Link to="/CC/admin/flows">Flows</Link> → create one. You get a valid{' '}
           <code>Entry → Speak → End</code> starter, so it will publish immediately and you can grow
-          it from there.
+          it from there. Canvas positions stay in this browser only — they are not part of the
+          published flow.
         </p>
         <p>In the builder, the order that avoids fighting the validator:</p>
         <ol style={{ margin: '0.3rem 0 0.7rem 1.1rem', color: 'var(--muted)', fontSize: 13 }}>
