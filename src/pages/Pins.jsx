@@ -51,7 +51,52 @@ export default function Pins() {
       toast.ok(`Saved ${got.pins?.length ?? 0} pin(s)`)
       void reloadStatus()
     } catch (e) {
-      toast.fail(e, 'Save pins')
+      toast.fail(e, 'Save all pins')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const saveOne = async (row) => {
+    if (!row.profile_id?.trim() || !row.flow_id?.trim()) {
+      toast.push('err', 'Profile and flow are required to save this pin')
+      return
+    }
+    setBusy(true)
+    try {
+      await api.putAnswerPin(row.profile_id, {
+        profile_id: row.profile_id,
+        flow_id: row.flow_id,
+        flow_version: row.flow_version || 'latest',
+        did: row.did ?? '',
+        note: row.note ?? '',
+      })
+      const list = await api.getAnswerPins()
+      setRows(list.pins ?? [])
+      setDirty(false)
+      toast.ok(`Saved pin ${row.profile_id}`)
+      void reloadStatus()
+    } catch (e) {
+      toast.fail(e, 'Save this pin')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const removeOne = async (row, i) => {
+    if (!window.confirm(`Remove the pin for ${row.profile_id || 'this row'}?`)) return
+    if (!row.profile_id?.trim()) {
+      setRows((xs) => xs.filter((_, n) => n !== i))
+      return
+    }
+    setBusy(true)
+    try {
+      await api.deleteAnswerPin(row.profile_id)
+      const list = await api.getAnswerPins()
+      setRows(list.pins ?? [])
+      setDirty(false)
+      toast.ok(`Removed pin ${row.profile_id}`)
+      void reloadStatus()
+    } catch (e) {
+      toast.fail(e, 'Remove pin')
     } finally {
       setBusy(false)
     }
@@ -82,9 +127,7 @@ export default function Pins() {
         key,
         ok: !!spoken,
         sessionId,
-        text:
-          spoken ||
-          'Session answered but the bot said nothing — check the Entry node has a Speak next to it.',
+        text: spoken || 'Bot said nothing — check Entry → Speak.',
       })
       toast.ok(`Smoke test passed for ${pin.profile_id}`)
     } catch (e) {
@@ -128,7 +171,7 @@ export default function Pins() {
         actions={
           <>
             <button className="btn" onClick={save} disabled={busy}>
-              {busy ? 'Saving…' : 'Save pins'}
+              {busy ? 'Saving…' : 'Save all'}
             </button>
             <button
               className="btn secondary"
@@ -257,21 +300,22 @@ export default function Pins() {
               )}
               <div className="actions tight">
                 <button
-                  className="btn sm"
-                  disabled={!r.profile_id || !r.flow_id || dirty || testing !== ''}
-                  title={dirty ? 'Save pins before testing' : 'Run a chat session against this pin'}
-                  onClick={() => void testPin(r)}
+                  className="btn secondary sm"
+                  disabled={busy || !r.profile_id || !r.flow_id}
+                  onClick={() => void saveOne(r)}
                 >
-                  {testing === `${r.profile_id}|${r.flow_id}` ? 'Testing…' : 'Test this pin'}
+                  Save this pin
                 </button>
                 <button
-                  className="btn danger sm"
-                  onClick={() => {
-                    setRows((xs) => xs.filter((_, n) => n !== i))
-                    setDirty(true)
-                  }}
+                  className="btn sm"
+                  disabled={!r.profile_id || !r.flow_id || testing !== ''}
+                  title="Run a chat session against this pin"
+                  onClick={() => void testPin(r)}
                 >
-                  Remove pin
+                  {testing === `${r.profile_id}|${r.flow_id}` ? 'Testing…' : 'Test'}
+                </button>
+                <button className="btn danger sm" disabled={busy} onClick={() => void removeOne(r, i)}>
+                  Remove
                 </button>
               </div>
               {testResult?.key === `${r.profile_id}|${r.flow_id}` && (

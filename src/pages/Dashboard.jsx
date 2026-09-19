@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useCatalog } from '../api/catalog'
 import { api } from '../api/client'
 import { Card, Empty, useAsync } from '../components/ui'
+import { blockerAction, collectOperatorWarnings } from '../lib/dashboardWarnings'
 import { readinessChecklist } from '../lib/setupSteps'
 
 const PORTS = ['listen', 'think', 'speak', 'knowledge', 'translate', 'skill']
@@ -18,6 +19,7 @@ export default function Dashboard() {
   // The profile list does not say whether a profile has a published version, and
   // the server counts unpublished rows as "ready" — so ask each one directly.
   const [publishedProfiles, setPublishedProfiles] = useState(new Set())
+  const [opWarnings, setOpWarnings] = useState([])
   useEffect(() => {
     const ids = (profiles.data?.profiles ?? []).map((p) => p.id)
     if (!ids.length) {
@@ -39,6 +41,19 @@ export default function Dashboard() {
       cancelled = true
     }
   }, [profiles.data])
+
+  useEffect(() => {
+    let cancelled = false
+    collectOperatorWarnings({
+      pins: pins.data?.pins ?? [],
+      flows: flows.data?.flows ?? [],
+    }).then((w) => {
+      if (!cancelled) setOpWarnings(w)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pins.data, flows.data])
 
   const refreshAll = () => {
     void reload()
@@ -176,20 +191,40 @@ export default function Dashboard() {
             ready_for_sessions: {String(status?.ready_for_sessions ?? '—')}
           </span>
         </div>
-        {!!status?.blockers?.length && (
-          <div className="probe err">blockers: {status.blockers.join(', ')}</div>
-        )}
+        {!!status?.blockers?.length &&
+          status.blockers.map((code) => {
+            const act = blockerAction(code)
+            return (
+              <div className="probe err" key={code} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span>{code}</span>
+                <Link className="btn sm" to={act.to}>
+                  {act.label}
+                </Link>
+              </div>
+            )
+          })}
         {!!status?.warnings?.length && (
           <div className="probe warn">warnings: {status.warnings.join(', ')}</div>
         )}
         <p className="inline-note">
-          The server's flag checks the database, the engine binding, the gateway registry and
-          whether at least one profile <em>row</em> exists. It does <strong>not</strong> check that
-          the profile has a published version, that a flow exists or is published, or that an answer
-          pin points at them. So it can report <code>ready</code> while every call is still refused
-          with <code>422 flow_pin_required</code>. Trust the checklist above.
+          Server Ready can still refuse calls without a pin. The flag checks the database, engines,
+          the gateway registry and whether a profile <em>row</em> exists — not a published flow or
+          an answer pin. Trust the checklist above, not <code>ready_for_sessions</code> alone.
         </p>
       </Card>
+
+      {!!opWarnings.length && (
+        <Card title="Operator warnings" hint="Amber only — these do not block Save or Publish.">
+          {opWarnings.map((w) => (
+            <div className="probe warn" key={w.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span>{w.text}</span>
+              <Link className="btn secondary sm" to={w.to}>
+                Open
+              </Link>
+            </div>
+          ))}
+        </Card>
+      )}
 
       <div className="grid-2">
         <Card

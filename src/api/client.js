@@ -264,4 +264,10 @@ export const api = {
         pins,
       },
     ),
+  getAnswerPin: (profileId, tenant = getTenant()) =>
+    request('GET', `/v1/tenant/answer-pins/${enc(profileId)}${q({ tenant_id: tenant })}`),
+  putAnswerPin: (profileId, pin, tenant = getTenant()) =>
+    request('PUT', `/v1/tenant/answer-pins/${enc(profileId)}${q({ tenant_id: tenant })}`, pin),
+  deleteAnswerPin: (profileId, tenant = getTenant()) =>
+    request('DELETE', `/v1/tenant/answer-pins/${enc(profileId)}${q({ tenant_id: tenant })}`),
 }
