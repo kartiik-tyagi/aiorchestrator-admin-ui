@@ -4,6 +4,8 @@ import { ToastProvider } from '../components/ui'
 import { getToken, setToken } from '../api/client'
 import ComingNext from '../pages/mi/ComingNext'
 import MiDashboard from '../pages/mi/Dashboard'
+import MiProfileDetail from '../pages/mi/ProfileDetail'
+import MiProfiles from '../pages/mi/Profiles'
 import ProductSwitch from './ProductSwitch'
 
 function Sidebar() {
@@ -21,11 +23,14 @@ function Sidebar() {
         <NavLink to="/MI/admin" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
           <span className="nav-label">Home</span>
         </NavLink>
+        <NavLink to="/MI/admin/profiles" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+          <span className="nav-label">Profiles</span>
+        </NavLink>
       </div>
       <div className="side-foot">
         <div className="nav-section">Status</div>
         <div style={{ padding: '0 0.6rem', fontSize: 12, color: 'var(--muted)' }}>
-          Profiles and meetings — next phases
+          Meetings — next phase
         </div>
       </div>
     </aside>
@@ -72,7 +77,8 @@ function ShellInner() {
         <TopBar />
         <Routes>
           <Route index element={<MiDashboard />} />
-          <Route path="profiles" element={<ComingNext title="MI profiles" />} />
+          <Route path="profiles" element={<MiProfiles />} />
+          <Route path="profiles/:id" element={<MiProfileDetail />} />
           <Route path="meetings" element={<ComingNext title="Meetings" />} />
           <Route path="*" element={<Navigate to="/MI/admin" replace />} />
         </Routes>

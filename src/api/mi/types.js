@@ -26,4 +26,26 @@
  * @property {string} [updated_at]
  */
 
+/**
+ * @typedef {Object} MiMomSection
+ * @property {string} id
+ * @property {string} [title]
+ *
+ * @typedef {Object} MiProfile
+ * @property {string} id
+ * @property {string} name
+ * @property {string[]|string} [languages]
+ * @property {{sections?: MiMomSection[]}} [mom_template]
+ * @property {Object} [rules]
+ * @property {Object} [memory_policy]
+ * @property {string} [b_authority_policy]
+ * @property {{transcript_days?: number}} [retention]
+ *
+ * @typedef {Object} MiKbDoc
+ * @property {string} id
+ * @property {string} [title]
+ * @property {string} [body]
+ * @property {number} [revision]
+ */
+
 export {}
