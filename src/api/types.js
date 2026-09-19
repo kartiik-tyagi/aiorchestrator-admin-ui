@@ -63,6 +63,23 @@ export const WELL_KNOWN_SLOTS = [
 /** Node interrupt modes — copy of Go; unused in 1.3 UI, catalog later. */
 export const INTERRUPT_MODES = ['inherit', 'barge_in', 'hotword', 'none']
 
+/** Profile-level barge modes — no inherit (internal/profile/conversation_policy.go). */
+export const PROFILE_INTERRUPT_MODES = ['off', 'on', 'after_ms']
+
+/** Intent scopes — copy of internal/profile/intent_catalog.go until catalog grows a key. */
+export const INTENT_SCOPES = ['global', 'hub', 'in_room']
+
+/** Intent actions — closed set from the same Go file. */
+export const INTENT_ACTIONS = [
+  'navigate',
+  'answer',
+  'go_department',
+  'switch_language',
+  'request_agent',
+  'menu',
+  'done',
+]
+
 /** Ports a gateway can be registered on. */
 export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'skill']
 
@@ -242,10 +259,16 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} [id]
  * @property {string} [tenant_id]
  * @property {{display_name?: string, family?: string}} [metadata]
- * @property {{canonical_sample_rate_hz?: number, frame_ms?: number}} [audio]
+ * @property {{canonical_sample_rate_hz?: number, frame_ms?: number,
+ *   inbound_normalize?: boolean, inbound_target_rms?: number, inbound_max_gain?: number,
+ *   inbound_noise_floor_rms?: number, tts_limiter?: boolean, tts_peak_limit?: number}} [audio]
  * @property {{listen?: boolean, speak?: boolean, think?: boolean, talk?: boolean}} [modes]
  * @property {{name?: string, instructions?: string, voice_id?: string,
- *   voice?: Record<string, string>}} [persona]
+ *   voice?: Record<string, string>, tts?: {pace?: number, temperature?: number}}} [persona]
+ * @property {string} [product]  call_center or empty (legacy)
+ * @property {Array<{id: string, scope: string, action: string, department?: string,
+ *   product?: string, examples?: string[], description?: string}>} [intent_catalog]
+ * @property {Object} [conversation_policy]
  * @property {{behaviour?: string, primary?: string, allowed?: string[],
  *   auto_detect?: boolean, mid_call_switch?: boolean}} [language]
  * @property {string[]} [hot_swap_allowed]

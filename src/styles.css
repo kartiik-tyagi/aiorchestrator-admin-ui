@@ -2805,3 +2805,25 @@ details.section > .body {
   background: var(--accent-soft);
   font-weight: 560;
 }
+
+table.plain {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.4rem 0 0.8rem;
+  font-size: 13px;
+}
+table.plain th,
+table.plain td {
+  text-align: left;
+  padding: 0.25rem 0.35rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+table.plain input,
+table.plain select {
+  width: 100%;
+}
+.plain-list {
+  margin: 0;
+  padding-left: 1.1rem;
+}

@@ -206,6 +206,10 @@ export const api = {
     request('GET', `/v1/profiles/${enc(id)}/versions/${enc(String(ver))}`),
   deleteProfile: (id) => request('DELETE', `/v1/profiles/${enc(id)}`),
   publishProfile: (id, doc) => request('POST', `/v1/profiles/${enc(id)}/versions`, doc),
+  getProfileDraft: (id) => request('GET', `/v1/profiles/${enc(id)}/draft`),
+  putProfileDraft: (id, doc) => request('PUT', `/v1/profiles/${enc(id)}/draft`, doc),
+  validateProfile: (id, doc) => request('POST', `/v1/profiles/${enc(id)}/validate`, doc),
+  listProfileVersions: (id) => request('GET', `/v1/profiles/${enc(id)}/versions`),
   /* ---- flows ---- */
   listFlows: (tenant = getTenant()) =>
     request(

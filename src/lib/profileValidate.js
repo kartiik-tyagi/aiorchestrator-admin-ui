@@ -4,7 +4,11 @@
  * operator there faster and explains the rule in words.
  */
 
+import { INTENT_ACTIONS, INTENT_SCOPES, PROFILE_INTERRUPT_MODES } from '../api/types.js'
+
 const LADDER_TIERS = ['clip', 'template', 'llm']
+const INTENT_ID_RE = /^[a-z0-9][a-z0-9_]{0,63}$/
+const DIAL_LIKE = /(?:^|[^0-9])\+?[0-9]{3,}(?:[^0-9]|$)/
 function hasPersonaVoice(doc) {
   if (doc.persona?.voice_id?.trim()) return true
   return Object.values(doc.persona?.voice ?? {}).some((v) => v?.trim())
@@ -94,5 +98,65 @@ export function validateProfile(doc, gateways) {
     if (speakGw && Object.keys(map).length && !map[speakGw] && !doc.persona?.voice_id?.trim())
       warn(`persona.voice has no entry for the bound speak gateway "${speakGw}"`)
   }
+
+  const product = (doc.product ?? '').trim()
+  if (product && product !== 'call_center')
+    err(`product must be call_center or empty (got "${product}") — product_mismatch`)
+
+  const seenIntent = new Set()
+  for (const [i, row] of (doc.intent_catalog ?? []).entries()) {
+    const id = (row?.id ?? '').trim()
+    if (!id || !INTENT_ID_RE.test(id))
+      err(`intent_catalog[${i}] id must match ^[a-z0-9][a-z0-9_]{0,63}$`)
+    else if (seenIntent.has(id)) err(`intent_catalog duplicate id "${id}"`)
+    else seenIntent.add(id)
+    if (row?.scope && !INTENT_SCOPES.includes(row.scope))
+      err(`intent "${id || i}" has unknown scope "${row.scope}"`)
+    if (row?.action && !INTENT_ACTIONS.includes(row.action))
+      err(`intent "${id || i}" has unknown action "${row.action}"`)
+    if (row?.action === 'go_department' && !(row.department ?? '').trim())
+      err(`intent "${id || i}" action go_department requires department`)
+    for (const [field, val] of [
+      ['department', row?.department],
+      ['product', row?.product],
+      ['description', row?.description],
+    ]) {
+      if (val && DIAL_LIKE.test(String(val)))
+        err(`intent "${id || i}" ${field} looks like a dial number — numbers belong on the flow matrix`)
+    }
+    for (const ex of row?.examples ?? []) {
+      if (ex && DIAL_LIKE.test(String(ex)))
+        err(`intent "${id || i}" example looks like a dial number`)
+    }
+  }
+
+  const ir = doc.conversation_policy?.interruption ?? {}
+  for (const key of ['mode', 'welcome_mode']) {
+    const v = (ir[key] ?? '').trim()
+    if (v && !PROFILE_INTERRUPT_MODES.includes(v))
+      err(`conversation_policy.interruption.${key} must be off|on|after_ms`)
+  }
+  if ((ir.mode === 'after_ms' || ir.welcome_mode === 'after_ms') && ir.welcome_grace_ms == null)
+    err('conversation_policy.interruption.welcome_grace_ms is required when mode or welcome_mode is after_ms')
+  const failMax = doc.conversation_policy?.failure?.safe_retry_max
+  if (failMax != null && (failMax < 0 || failMax > 3))
+    err('conversation_policy.failure.safe_retry_max must be 0–3')
+
+  const a = doc.audio ?? {}
+  if (a.inbound_target_rms != null && (a.inbound_target_rms <= 0 || a.inbound_target_rms > 0.5))
+    err(`audio.inbound_target_rms out of range: ${a.inbound_target_rms} (0 < v <= 0.5)`)
+  if (a.inbound_max_gain != null && (a.inbound_max_gain < 1 || a.inbound_max_gain > 16))
+    err(`audio.inbound_max_gain out of range: ${a.inbound_max_gain} (1 <= v <= 16)`)
+  if (a.inbound_noise_floor_rms != null && (a.inbound_noise_floor_rms < 0 || a.inbound_noise_floor_rms > 0.1))
+    err(`audio.inbound_noise_floor_rms out of range: ${a.inbound_noise_floor_rms} (0 <= v <= 0.1)`)
+  if (a.tts_peak_limit != null && (a.tts_peak_limit <= 0 || a.tts_peak_limit > 1))
+    err(`audio.tts_peak_limit out of range: ${a.tts_peak_limit} (0 < v <= 1)`)
+
+  const tts = doc.persona?.tts ?? {}
+  if (tts.pace != null && !(Number.isFinite(tts.pace) && tts.pace > 0))
+    err(`persona.tts.pace must be a finite number greater than 0 (got ${tts.pace})`)
+  if (tts.temperature != null && !Number.isFinite(tts.temperature))
+    err('persona.tts.temperature must be a finite number')
+
   return issues
 }

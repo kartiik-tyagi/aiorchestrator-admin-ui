@@ -19,6 +19,7 @@ import {
   useToast,
 } from '../components/ui'
 import { validateProfile } from '../lib/profileValidate'
+import Industrial from './profile/Industrial'
 /**
  * Full profile document editor.
  *
@@ -72,6 +73,8 @@ const emptyDoc = (id) => ({
   speak_canonical_locale: 'en-IN',
   speak_locale_strict: false,
   speak_allow_canonical_fallback: true,
+  product: 'call_center',
+  intent_catalog: [],
 })
 export default function Profiles() {
   const { catalog, gateways, idsFor, reloadStatus } = useCatalog()
@@ -88,8 +91,18 @@ export default function Profiles() {
   const [newName, setNewName] = useState('')
   const [creating, setCreating] = useState(false)
   const [q, setQ] = useState('')
+  const [fromDraft, setFromDraft] = useState(false)
+  const [serverIssues, setServerIssues] = useState([])
+  const [versions, setVersions] = useState([])
   const locales = catalog?.tts_locales_v1 ?? []
-  const issues = useMemo(() => (doc ? validateProfile(doc, gateways) : []), [doc, gateways])
+  const localIssues = useMemo(() => (doc ? validateProfile(doc, gateways) : []), [doc, gateways])
+  const issues = useMemo(
+    () => [
+      ...localIssues.map((i) => ({ ...i, source: 'local' })),
+      ...serverIssues,
+    ],
+    [localIssues, serverIssues],
+  )
   const errors = issues.filter((i) => i.level === 'error')
 
   /** Shallow-merge a patch into the document. */
@@ -122,20 +135,35 @@ export default function Profiles() {
     async (id) => {
       setSelected(id)
       setVersion(null)
+      setFromDraft(false)
+      setServerIssues([])
+      setVersions([])
+      try {
+        const vers = await api.listProfileVersions(id).catch(() => ({ versions: [] }))
+        setVersions(vers.versions ?? [])
+      } catch {
+        setVersions([])
+      }
+      try {
+        const draft = await api.getProfileDraft(id)
+        const got = draft.document ?? draft.doc ?? null
+        if (got) {
+          setDoc({ ...got, id })
+          setFromDraft(true)
+          return
+        }
+      } catch (e) {
+        if (e.status !== 404) {
+          toast.fail(e, 'Load profile draft')
+          return
+        }
+      }
       try {
         const v = await api.getProfileVersion(id, 'latest')
         const got = v.document ?? v.doc ?? null
-        setDoc(
-          got
-            ? {
-                ...got,
-                id,
-              }
-            : emptyDoc(id),
-        )
+        setDoc(got ? { ...got, id } : emptyDoc(id))
         setVersion(v.version ?? null)
       } catch (e) {
-        // A profile with no published version yet is normal.
         if (e.status === 404) {
           setDoc(emptyDoc(id))
           return
@@ -166,6 +194,7 @@ export default function Profiles() {
         id,
         tenant_id: getTenant(),
         display_name: newName.trim(),
+        product: 'call_center',
       })
       toast.ok(`Created ${id}`)
       setCreating(false)
@@ -177,6 +206,56 @@ export default function Profiles() {
       toast.fail(e, 'Create profile')
     } finally {
       setBusy(false)
+    }
+  }
+  const saveDraft = async () => {
+    if (!doc || !selected) return
+    setBusy(true)
+    try {
+      await api.putProfileDraft(selected, doc)
+      setFromDraft(true)
+      toast.ok('Draft saved — not live until Publish')
+    } catch (e) {
+      toast.fail(e, 'Save draft')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const checkServer = async () => {
+    if (!doc || !selected) return
+    setBusy(true)
+    try {
+      await api.validateProfile(selected, doc)
+      setServerIssues([])
+      toast.ok('Server validate: ok')
+    } catch (e) {
+      setServerIssues([
+        {
+          level: 'error',
+          message: e.message || 'Server validate failed',
+          source: 'server',
+        },
+      ])
+      toast.fail(e, 'Server validate')
+    } finally {
+      setBusy(false)
+    }
+  }
+  const copyVersionIntoDraft = async (ver) => {
+    if (
+      !confirm(
+        `Replace the on-screen document with published version ${ver}? You still have to Save draft to keep it.`,
+      )
+    )
+      return
+    try {
+      const v = await api.getProfileVersion(selected, ver)
+      const got = v.document ?? v.doc
+      if (!got) throw new Error('version had no document')
+      setDoc({ ...got, id: selected })
+      toast.ok(`Loaded version ${ver} into the form — Save draft to keep it`)
+    } catch (e) {
+      toast.fail(e, 'Load version')
     }
   }
   const publish = async () => {
@@ -354,7 +433,9 @@ This removes the profile and all its published ` +
                   >
                     {selected}
                   </h2>
-                  {version != null ? (
+                  {fromDraft ? (
+                    <span className="badge warn">Editing draft — not live until Publish</span>
+                  ) : version != null ? (
                     <span className="badge">published v{version}</span>
                   ) : (
                     <span className="badge warn">no published version</span>
@@ -366,6 +447,12 @@ This removes the profile and all its published ` +
                   />
                   <button className="btn secondary sm" onClick={() => setRawMode((v) => !v)}>
                     {rawMode ? 'Back to form' : 'Advanced JSON'}
+                  </button>
+                  <button className="btn secondary sm" onClick={() => void saveDraft()} disabled={busy}>
+                    Save draft
+                  </button>
+                  <button className="btn secondary sm" onClick={() => void checkServer()} disabled={busy}>
+                    Check
                   </button>
                   <button className="btn" onClick={publish} disabled={busy || errors.length > 0}>
                     {busy ? 'Publishing…' : 'Publish version'}
@@ -385,7 +472,10 @@ This removes the profile and all its published ` +
                     {issues.map((i, n) => (
                       <div key={n} className={`issue ${i.level}`} style={{ cursor: 'default' }}>
                         <span aria-hidden="true">{i.level === 'error' ? '✕' : '!'}</span>
-                        <span>{i.message}</span>
+                        <span>
+                          {i.source === 'server' ? 'Server: ' : ''}
+                          {i.message}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -447,6 +537,28 @@ This removes the profile and all its published ` +
                       />
                     </div>
                   </Section>
+
+                  <Industrial doc={doc} patch={patch} patchIn={patchIn} catalog={catalog} />
+
+                  {!!versions.length && (
+                    <Section title="Published versions">
+                      <ul className="plain-list">
+                        {versions.map((v) => (
+                          <li key={v.version}>
+                            v{v.version}
+                            {v.published_at ? ` — ${v.published_at}` : ''}
+                            <button
+                              className="btn secondary sm"
+                              style={{ marginLeft: 8 }}
+                              onClick={() => void copyVersionIntoDraft(v.version)}
+                            >
+                              Inspect into form
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </Section>
+                  )}
 
                   <Section title="Modes & audio" open>
                     <div className="row tight">
