@@ -66,7 +66,7 @@ export default function MiMeetings() {
         participant_namespace: ns.trim(),
         title: title.trim(),
       })
-      toast.ok('Meeting created — profile snapshot pinned')
+      toast.ok('Meeting created — profile snapshot stored')
       setCreating(false)
       nav(`/MI/admin/meetings/${encodeURIComponent(got.id)}`)
     } catch (e) {

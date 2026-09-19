@@ -3,6 +3,7 @@ import { mi } from '../../api/mi/client'
 import { Card, TextField, useToast } from '../../components/ui'
 import { asList, asMom, unsupportedFields } from '../../lib/miDraft'
 import { miErrorSentence } from '../../lib/miErrors'
+import { setDirtyGuard } from '../../lib/dirtyGuard'
 
 export default function DraftEditor({ meetingId, onDraft }) {
   const toast = useToast()
@@ -10,12 +11,19 @@ export default function DraftEditor({ meetingId, onDraft }) {
   const [err, setErr] = useState(null)
   const [busy, setBusy] = useState(false)
   const [loadedVersion, setLoadedVersion] = useState(null)
+  const [dirty, setDirty] = useState(false)
 
   const apply = (d) => {
     setDraft(d)
     setLoadedVersion(d.version)
+    setDirty(false)
     onDraft?.(d)
   }
+
+  useEffect(() => {
+    setDirtyGuard(dirty, 'draft')
+    return () => setDirtyGuard(false)
+  }, [dirty])
 
   const load = async () => {
     try {
@@ -43,10 +51,12 @@ export default function DraftEditor({ meetingId, onDraft }) {
 
   const setMomSection = (i, field, value) => {
     const sections = (mom.sections ?? []).map((s, idx) => (idx === i ? { ...s, [field]: value } : s))
+    setDirty(true)
     setDraft({ ...draft, mom: { ...mom, sections } })
   }
   const setClaim = (key, i, field, value) => {
     const next = asList(draft[key]).map((c, idx) => (idx === i ? { ...c, [field]: value } : c))
+    setDirty(true)
     setDraft({ ...draft, [key]: next })
   }
 

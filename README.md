@@ -11,7 +11,14 @@ npm install
 npm run dev      # http://localhost:5183
 ```
 
-Open **`http://localhost:5183/`** — product picker. Call Center lives at **`/CC/admin`**. Meeting Intelligence lives at **`/MI/admin`**. Old bookmarks (`/engines`, `/profiles`, `/flows`, `/bindings`, `/pins`, `/settings`, `/tutorial`) redirect into `/CC/admin/…`.
+Open **`http://localhost:5183/`** — product picker. Vite 8 binds IPv6 only: use **`localhost:5183`**, not `127.0.0.1`.
+
+| Product | Operator home | Job |
+|---|---|---|
+| Call Center | `http://localhost:5183/CC/admin` | Make a DID answerable (engines → profile → graph → pin). Tenant + engine status live **only here**. |
+| Meeting Intelligence | `http://localhost:5183/MI/admin` | Capture or ingest a meeting → official minutes → Ask. No CC catalog, pins, or barge. Retention purge is under `/MI/admin/retention`, not the home buttons. |
+
+Old bookmarks (`/engines`, `/profiles`, `/flows`, `/bindings`, `/pins`, `/settings`, `/tutorial`) redirect into `/CC/admin/…`. The product switcher confirms before leaving unsaved CC profiles/flows or MI desks/drafts.
 
 The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http://host:port npm run dev`. Vite proxies `/v1`, `/mi/v1`, and `/edge` to that origin.
 

@@ -4,6 +4,7 @@ import { mi } from '../../api/mi/client'
 import { Card, NumberField, StringList, TextField, useToast } from '../../components/ui'
 import AskPane from './AskPane'
 import { miErrorSentence } from '../../lib/miErrors'
+import { setDirtyGuard } from '../../lib/dirtyGuard'
 
 function parseLangs(raw) {
   if (Array.isArray(raw)) return raw
@@ -43,6 +44,7 @@ export default function MiProfileDetail() {
   const [kbBody, setKbBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
+  const [dirty, setDirty] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +62,7 @@ export default function MiProfileDetail() {
       setMemoryText(JSON.stringify(asObj(p.memory_policy), null, 2))
       const list = await mi.listKb(id)
       setKb(list.docs ?? list.kb ?? list.items ?? (Array.isArray(list) ? list : []))
+      setDirty(false)
       setErr(null)
     } catch (e) {
       setErr(miErrorSentence(e.code, e.message))
@@ -70,7 +73,15 @@ export default function MiProfileDetail() {
     void load()
   }, [load])
 
-  const patch = (p) => setDoc((d) => ({ ...d, ...p }))
+  useEffect(() => {
+    setDirtyGuard(dirty, 'Minutes desk')
+    return () => setDirtyGuard(false)
+  }, [dirty])
+
+  const patch = (p) => {
+    setDirty(true)
+    setDoc((d) => ({ ...d, ...p }))
+  }
 
   const save = async () => {
     if (!doc) return
@@ -107,6 +118,7 @@ export default function MiProfileDetail() {
         b_authority_policy: doc.b_authority_policy ?? '',
         retention: { transcript_days: doc._transcript_days },
       })
+      setDirty(false)
       await load()
       toast.ok('Saved — new meetings will use this. Existing meetings keep their snapshot.')
     } catch (e) {
@@ -235,10 +247,26 @@ export default function MiProfileDetail() {
       </Card>
 
       <Card title="Advanced rules JSON" hint="Merged with min_segments on save. Invalid JSON blocks save.">
-        <textarea rows={8} value={rulesRest} onChange={(e) => setRulesRest(e.target.value)} spellCheck={false} />
+        <textarea
+          rows={8}
+          value={rulesRest}
+          onChange={(e) => {
+            setDirty(true)
+            setRulesRest(e.target.value)
+          }}
+          spellCheck={false}
+        />
       </Card>
       <Card title="Memory policy JSON">
-        <textarea rows={6} value={memoryText} onChange={(e) => setMemoryText(e.target.value)} spellCheck={false} />
+        <textarea
+          rows={6}
+          value={memoryText}
+          onChange={(e) => {
+            setDirty(true)
+            setMemoryText(e.target.value)
+          }}
+          spellCheck={false}
+        />
       </Card>
 
       <Card title="Knowledge base">
