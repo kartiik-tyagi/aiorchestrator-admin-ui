@@ -8,6 +8,7 @@ import DraftEditor from './DraftEditor'
 import ApproveWizard from './ApproveWizard'
 import OfficialPane from './OfficialPane'
 import AskPane from './AskPane'
+import InsightsPane from './InsightsPane'
 
 const CASE_B_FIXTURE = `{
   "provider_id": "coral",
@@ -39,6 +40,7 @@ export default function MiMeetingDetail() {
   const [transcript, setTranscript] = useState(null)
   const [genPick, setGenPick] = useState('')
   const [draft, setDraft] = useState(null)
+  const [refreshBusy, setRefreshBusy] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -57,16 +59,34 @@ export default function MiMeetingDetail() {
   useEffect(() => {
     if (!facet) return
     const terminal = jobTerminal(facet.job?.state)
+    const insightsBusy =
+      facet.insights?.status &&
+      !['ready', 'succeeded', 'failed', 'skipped', 'disabled', 'idle', ''].includes(
+        String(facet.insights.status).toLowerCase(),
+      )
     let t
     const tick = () => {
       if (document.hidden) return
       void load()
     }
-    if (!terminal) t = window.setInterval(tick, 4000)
+    if (!terminal || insightsBusy || facet.insights?.stale) t = window.setInterval(tick, 4000)
     return () => {
       if (t) window.clearInterval(t)
     }
-  }, [facet?.job?.state, load])
+  }, [facet?.job?.state, facet?.insights?.status, facet?.insights?.stale, load])
+
+  const refreshInsights = async () => {
+    setRefreshBusy(true)
+    try {
+      await mi.refreshInsights(id)
+      await load()
+      toast.ok('Insights refresh requested — MoM was not regenerated.')
+    } catch (e) {
+      toast.push('err', miErrorSentence(e.code, e.message))
+    } finally {
+      setRefreshBusy(false)
+    }
+  }
 
   useEffect(() => {
     if (tab !== 'transcript') return
@@ -151,7 +171,13 @@ export default function MiMeetingDetail() {
           Transcript
         </button>
         <button className={`btn ${tab === 'draft' ? '' : 'secondary'} sm`} onClick={() => setTab('draft')}>
-          Draft
+          MoM
+        </button>
+        <button className={`btn ${tab === 'summary' ? '' : 'secondary'} sm`} onClick={() => setTab('summary')}>
+          Summary
+        </button>
+        <button className={`btn ${tab === 'feedback' ? '' : 'secondary'} sm`} onClick={() => setTab('feedback')}>
+          AI Feedback
         </button>
         <button className={`btn ${tab === 'approve' ? '' : 'secondary'} sm`} onClick={() => setTab('approve')}>
           Approve
@@ -163,6 +189,35 @@ export default function MiMeetingDetail() {
           Ask
         </button>
       </div>
+
+      {facet.insights?.stale && (
+        <div className="probe warn">
+          Insights are behind the current draft version
+          {facet.insights.source_draft_version != null || facet.insights.draft_version != null
+            ? ` (insights from v${facet.insights.source_draft_version ?? '?'}, draft now v${facet.insights.draft_version ?? '?'})`
+            : ''}
+          . Refresh rebuilds Summary/Feedback only — it does not regenerate MoM. Approve is not blocked by
+          stale insights.
+        </div>
+      )}
+
+      {(tab === 'summary' || tab === 'feedback' || tab === 'draft') && (
+        <div className="actions tight" style={{ marginBottom: 8 }}>
+          <button
+            type="button"
+            className="btn secondary sm"
+            disabled={refreshBusy || !facet.draft?.ready}
+            title={!facet.draft?.ready ? 'No draft yet — cannot refresh insights' : undefined}
+            onClick={() => void refreshInsights()}
+          >
+            Refresh insights
+          </button>
+          <span className="desc">
+            {facet.insights?.status ? `insights ${facet.insights.status}` : 'insights idle'}
+            {facet.insights?.error_code ? ` (${facet.insights.error_code})` : ''}
+          </span>
+        </div>
+      )}
 
       {tab === 'overview' && (
         <>
@@ -289,6 +344,8 @@ export default function MiMeetingDetail() {
       )}
 
       {tab === 'draft' && <DraftEditor meetingId={id} onDraft={setDraft} />}
+      {tab === 'summary' && <InsightsPane mode="summary" insights={facet.insights} />}
+      {tab === 'feedback' && <InsightsPane mode="feedback" insights={facet.insights} />}
       {tab === 'approve' && <ApproveWizard meetingId={id} draft={draft} />}
       {tab === 'official' && <OfficialPane meetingId={id} />}
       {tab === 'ask' && (

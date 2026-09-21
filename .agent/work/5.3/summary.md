@@ -1,6 +1,6 @@
 # 5.3 — L4 summary (Summarizer)
 
-Closed. SHA pending commit.
+Closed. `1a0648b53651cd81671fab0bfafbe6358ae71ec5`.
 
 Profile inbox confirm/reject and insights toggles (default off) land on the desk. Refresh with both off will 400 until 5.4 surfaces it.
 
@@ -19,7 +19,7 @@ checklist:
     pass: true
   - id: residual_risks
     pass: true
-    note: empty lab inbox OK; soak seeds in 5.6
+    note: empty lab inbox OK; soak seeds in 5.6; hook Co-authored-by left as-is
   - id: next_context
     pass: true
   - id: honest
