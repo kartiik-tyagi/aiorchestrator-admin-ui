@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { mi } from '../../api/mi/client'
 import { Card, NumberField, StringList, TextField, useToast } from '../../components/ui'
 import AskPane from './AskPane'
+import DirectoryPane from './DirectoryPane'
 import { miErrorSentence } from '../../lib/miErrors'
 import { setDirtyGuard } from '../../lib/dirtyGuard'
 
@@ -269,7 +270,16 @@ export default function MiProfileDetail() {
         />
       </Card>
 
-      <Card title="Knowledge base">
+      <DirectoryPane
+        profileId={id}
+        rulesKb={asObj(asObj(doc.rules).kb)}
+        onProfileReload={load}
+      />
+
+      <Card
+        title="Other docs (standing library)"
+        hint="Paste library for Ask / background — not the people/products identity directory."
+      >
         {kb.map((d) => (
           <button
             type="button"
@@ -285,7 +295,7 @@ export default function MiProfileDetail() {
             {d.id}
           </button>
         ))}
-        {!kb.length && <p className="desc">No KB docs yet.</p>}
+        {!kb.length && <p className="desc">No Other docs yet.</p>}
         <TextField
           label="doc_id"
           value={kbId}
@@ -300,7 +310,7 @@ export default function MiProfileDetail() {
         <label>body</label>
         <textarea rows={8} value={kbBody} onChange={(e) => setKbBody(e.target.value)} />
         <button className="btn" onClick={saveKb} disabled={busy}>
-          Save KB doc
+          Save Other doc
         </button>
       </Card>
       <AskPane scope="profile" targetId={id} />

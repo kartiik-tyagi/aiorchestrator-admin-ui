@@ -1,6 +1,6 @@
 # 5.1 — L4 summary (Summarizer)
 
-Closed. See git log for `admin-ui 5.1:` (SHA recorded in CONTINUE_WAVE5 after commit).
+Closed. `04f518a1da94f1b461d8297c0d7b17cf680a18ec`.
 
 Wave 5 client surface for inbox, directory CSV, enableKg, entities, insights refresh, and terminology. Probe notes hide meta/actions (404). Lint exit 0. No UI pages.
 
@@ -20,7 +20,7 @@ checklist:
     pass: true
   - id: residual_risks
     pass: true
-    note: CSV multipart vs text covered; enableKg multi-step UX deferred to 5.2
+    note: CSV multipart vs text covered; enableKg multi-step UX deferred to 5.2; hook appended Co-authored-by (left as-is)
   - id: next_context
     pass: true
   - id: honest
