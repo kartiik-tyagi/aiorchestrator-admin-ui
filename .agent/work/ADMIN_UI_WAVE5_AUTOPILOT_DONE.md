@@ -13,7 +13,7 @@
 | 5.3 | `1a0648b53651cd81671fab0bfafbe6358ae71ec5` | confirm memory suggestions and keep insights off until enabled |
 | 5.4 | `a021d7af76533e7d9e0f57ed3571785621b12f41` | keep meeting summary and feedback as advice beside MoM |
 | 5.5 | `abf10b4433eb91a0ffa0793fffa17507e60eba29` | keep the glossary next to memory without blurring MoM trust |
-| 5.6 | _(artifacts commit)_ | soak only — no app code |
+| 5.6 | `9591189595fa0f0a5dfd5b94e065f118d76cf8cb` | record memory insights soak with honest skips |
 
 Note: commit hooks may append `Co-authored-by: Cursor` — left as-is per AUTOPILOT (do not amend).
 

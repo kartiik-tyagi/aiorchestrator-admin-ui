@@ -1,6 +1,6 @@
 # 5.6 — L4 summary (Summarizer)
 
-Closed as **agent soak with explicit Skips**. No application commit (verification-only).
+Closed as **agent soak with explicit Skips**. `9591189595fa0f0a5dfd5b94e065f118d76cf8cb`. No application code in this commit.
 
 Do **not** treat as human owner Pass. Remaining human ticks in `soak.md`.
 
