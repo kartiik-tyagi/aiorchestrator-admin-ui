@@ -24,7 +24,7 @@ The orchestrator must be running on `:8011`. Point elsewhere with `ORCH_URL=http
 
 > Vite 8 binds IPv6 only, so use **`localhost:5183`**, not `127.0.0.1:5183`.
 
-**Phase plans (UI-only sync with the live kernel, Call Center + Meeting Intelligence):** start at [`docs/phases/README.md`](docs/phases/README.md). Programme lock: [`docs/phases/PROGRAMME.md`](docs/phases/PROGRAMME.md). Do not implement from this README — implement one phase file at a time.
+**Phase plans (UI-only sync with the live kernel, Call Center + Meeting Intelligence):** start at [`docs/phases/README.md`](docs/phases/README.md). Programme lock: [`docs/phases/PROGRAMME.md`](docs/phases/PROGRAMME.md). Wave 5 (memory + insights gaps): [`docs/phases/WAVE_5_GAP.md`](docs/phases/WAVE_5_GAP.md). Do not implement from this README — implement one phase file at a time.
 
 ---
 
