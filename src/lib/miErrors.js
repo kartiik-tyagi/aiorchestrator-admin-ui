@@ -4,6 +4,8 @@ const COPY = {
   invalid_lifecycle: 'That action is not allowed in this meeting state.',
   ingest_unauthorized: 'This lab requires an ingest token. Enter X-MI-Ingest-Token and try again.',
   kb_unauthorized: 'This lab requires a KB write token. Enter X-MI-KB-Token and try again.',
+  insights_disabled:
+    'Meeting Summary and AI Feedback are both off for this profile. Enable rules.insights.summary and/or rules.insights.feedback, then refresh.',
   attribution_failed: 'Every segment needs a speaker id and a display name.',
   insufficient_transcript: 'There is no sealed transcript generation to regenerate from.',
   b_rejected_quality: 'The transcript did not meet the quality gate.',

@@ -1,6 +1,6 @@
 # 5.2 — L4 summary (Summarizer)
 
-Closed. SHA pending commit.
+Closed. `d898e740ca640bd90321337218fc64e8514521a3`.
 
 Operators can seed people/products CSV, export, enable KG, and store X-MI-KB-Token for directory writes. Other docs remain a separate standing library.
 
@@ -20,7 +20,7 @@ checklist:
     pass: true
   - id: residual_risks
     pass: true
-    note: dry-run depends on server; import summary fields generic
+    note: dry-run depends on server; import summary fields generic; hook Co-authored-by left as-is
   - id: next_context
     pass: true
   - id: honest

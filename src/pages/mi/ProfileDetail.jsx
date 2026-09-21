@@ -4,6 +4,8 @@ import { mi } from '../../api/mi/client'
 import { Card, NumberField, StringList, TextField, useToast } from '../../components/ui'
 import AskPane from './AskPane'
 import DirectoryPane from './DirectoryPane'
+import InsightsFlags from './InsightsFlags'
+import MemoryInbox from './MemoryInbox'
 import { miErrorSentence } from '../../lib/miErrors'
 import { setDirtyGuard } from '../../lib/dirtyGuard'
 
@@ -46,18 +48,27 @@ export default function MiProfileDetail() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [dirty, setDirty] = useState(false)
+  const [insightsSummary, setInsightsSummary] = useState(false)
+  const [insightsFeedback, setInsightsFeedback] = useState(false)
 
   const load = useCallback(async () => {
     try {
       const p = await mi.getProfile(id)
       setDoc(p)
       const rules = asObj(p.rules)
-      const min = rules.case_b?.min_segments
+      const insights = asObj(rules.insights)
+      setInsightsSummary(insights.summary === true || insights.summary === 'true')
+      setInsightsFeedback(insights.feedback === true || insights.feedback === 'true')
       const rest = { ...rules }
       if (rest.case_b) {
-        const { min_segments, ...cb } = rest.case_b
+        const { min_segments: _ms, ...cb } = rest.case_b
         rest.case_b = Object.keys(cb).length ? cb : undefined
         if (!rest.case_b) delete rest.case_b
+      }
+      if (rest.insights) {
+        const { summary: _s, feedback: _f, ...insRest } = asObj(rest.insights)
+        if (Object.keys(insRest).length) rest.insights = insRest
+        else delete rest.insights
       }
       setRulesRest(JSON.stringify(rest, null, 2))
       setMemoryText(JSON.stringify(asObj(p.memory_policy), null, 2))
@@ -104,6 +115,12 @@ export default function MiProfileDetail() {
     const rules = { ...rest }
     if (min != null && min !== '') {
       rules.case_b = { ...(rules.case_b ?? {}), min_segments: Number(min) }
+    }
+    const priorInsights = asObj(asObj(rest).insights)
+    rules.insights = {
+      ...priorInsights,
+      summary: !!insightsSummary,
+      feedback: !!insightsFeedback,
     }
     setBusy(true)
     try {
@@ -274,6 +291,18 @@ export default function MiProfileDetail() {
         profileId={id}
         rulesKb={asObj(asObj(doc.rules).kb)}
         onProfileReload={load}
+      />
+
+      <MemoryInbox profileId={id} />
+
+      <InsightsFlags
+        summary={insightsSummary}
+        feedback={insightsFeedback}
+        onChange={({ summary, feedback }) => {
+          setDirty(true)
+          setInsightsSummary(summary)
+          setInsightsFeedback(feedback)
+        }}
       />
 
       <Card
