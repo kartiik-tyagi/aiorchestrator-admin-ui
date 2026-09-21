@@ -89,6 +89,26 @@ export default function MiDashboard() {
         )}
         {listErr && <div className="probe warn">Profiles unavailable — {listErr}</div>}
       </Card>
+
+      <Card title="Trust legend" hint="Wave 5 — do not blur these classes.">
+        <ul className="desc" style={{ paddingLeft: 18, margin: 0 }}>
+          <li>
+            <strong>MoM</strong> — meeting truth. Edit the draft and approve to Official.
+          </li>
+          <li>
+            <strong>Meeting Summary</strong> — skim of this meeting only. Advice surface; never Official;
+            never Ask-indexed.
+          </li>
+          <li>
+            <strong>AI Feedback</strong> — advice only. Never Official; never written into MoM; never
+            Ask-indexed.
+          </li>
+          <li>
+            <strong>Memory inbox</strong> — pending identity/terminology suggestions on a profile. Confirm
+            or reject there (open a profile).
+          </li>
+        </ul>
+      </Card>
     </div>
   )
 }

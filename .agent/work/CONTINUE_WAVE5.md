@@ -4,8 +4,8 @@
 |---|---|
 | Mode | **AUTOPILOT** |
 | Last closed programme | **0.1–4.2** |
-| Last closed Wave 5 | **5.4** (SHA pending) |
-| Current phase | **5.5** |
+| Last closed Wave 5 | **5.5** (SHA pending) |
+| Current phase | **5.6** |
 | Current role | **Planner** |
 | Autopilot runbook | `docs/phases/ADMIN_UI_WAVE5_AUTOPILOT.md` |
 | Gap SoT | `docs/phases/WAVE_5_GAP.md` |

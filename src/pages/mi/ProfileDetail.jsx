@@ -6,6 +6,7 @@ import AskPane from './AskPane'
 import DirectoryPane from './DirectoryPane'
 import InsightsFlags from './InsightsFlags'
 import MemoryInbox from './MemoryInbox'
+import TerminologyPane from './TerminologyPane'
 import { miErrorSentence } from '../../lib/miErrors'
 import { setDirtyGuard } from '../../lib/dirtyGuard'
 
@@ -304,6 +305,8 @@ export default function MiProfileDetail() {
           setInsightsFeedback(feedback)
         }}
       />
+
+      <TerminologyPane profileId={id} />
 
       <Card
         title="Other docs (standing library)"
