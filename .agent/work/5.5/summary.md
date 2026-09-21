@@ -1,6 +1,6 @@
 # 5.5 — L4 summary (Summarizer)
 
-Closed. SHA pending commit.
+Closed. `abf10b4433eb91a0ffa0793fffa17507e60eba29`.
 
 Glossary add/list on the profile; home trust legend keeps MoM vs Summary vs Feedback distinct. Inbox remains the pending decision queue.
 
@@ -19,7 +19,7 @@ checklist:
     pass: true
   - id: residual_risks
     pass: true
-    note: POST body field names may need soak adjust if facade differs
+    note: POST body field names may need soak adjust if facade differs; hook Co-authored-by left as-is
   - id: next_context
     pass: true
   - id: honest

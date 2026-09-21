@@ -2,14 +2,13 @@
 
 | Field | Value |
 |---|---|
-| Mode | **AUTOPILOT** |
+| Mode | **DONE** (Wave 5 feature Closed; 5.6 agent soak with Skips) |
 | Last closed programme | **0.1–4.2** |
-| Last closed Wave 5 | **5.5** (SHA pending) |
-| Current phase | **5.6** |
-| Current role | **Planner** |
-| Autopilot runbook | `docs/phases/ADMIN_UI_WAVE5_AUTOPILOT.md` |
-| Gap SoT | `docs/phases/WAVE_5_GAP.md` |
+| Last closed Wave 5 | **5.5** (`abf10b4`) + **5.6** soak artifacts |
+| Current phase | — |
+| Current role | — |
+| Done marker | `.agent/work/ADMIN_UI_WAVE5_AUTOPILOT_DONE.md` |
 | Branch | `main` |
 
-Do not push. Message form: `admin-ui 5.N: <why>`. No AI trailers (hook may append Co-authored-by — do not amend).
-Do not fold unrelated dirty WIP into phase commits.
+Human should finish remaining soak ticks in `.agent/work/5.6/soak.md` before claiming owner Pass.
+Do not push. Do not start CC redesign / kernel Go.
