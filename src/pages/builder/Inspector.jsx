@@ -341,6 +341,8 @@ export default function Inspector({
   catalogProfileId = '',
   onCatalogProfileId,
   profileIds = [],
+  apiIntegrationIds = [],
+  onEnsureApiToolResults,
 }) {
   const { catalog } = useCatalog()
   const nodeIds = doc.nodes.map((n) => n.id)
@@ -525,13 +527,23 @@ export default function Inspector({
               <SelectField
                 label="Tool verb"
                 value={n.tool ?? ''}
-                onChange={(v) =>
-                  patchNode(n.id, {
+                onChange={(v) => {
+                  const p = {
                     tool: v,
-                  })
+                  }
+                  if (v === 'api') {
+                    p.interrupt = n.interrupt || 'off'
+                    if (n.matrix_intent) p.matrix_intent = undefined
+                  }
+                  if (v !== 'api' && n.api_id) p.api_id = undefined
+                  patchNode(n.id, p)
+                }}
+                options={catalog?.tools ?? ['transfer', 'hangup', 'api']}
+                desc={
+                  n.tool === 'api'
+                    ? 'Tool(api) is non-terminal: HTTP runs, slots update, then a tool_result edge continues the graph.'
+                    : 'transfer / hangup arm irreversibly: barge off → closing line → execute (terminal).'
                 }
-                options={catalog?.tools ?? ['transfer', 'hangup']}
-                desc="Required on Tool nodes. Arming a tool is irreversible: barge off → closing line → execute."
               />
               {n.tool === 'transfer' && (
                 <SelectField
@@ -545,6 +557,42 @@ export default function Inspector({
                   options={doc.matrix.map((m) => m.intent)}
                   desc="Destination comes from the routing matrix — never typed on the node."
                 />
+              )}
+              {n.tool === 'api' && (
+                <>
+                  <SelectField
+                    label="api_id"
+                    value={n.api_id ?? ''}
+                    onChange={(v) =>
+                      patchNode(n.id, {
+                        api_id: v || undefined,
+                      })
+                    }
+                    options={apiIntegrationIds}
+                    desc={
+                      apiIntegrationIds.length
+                        ? 'Must match an api_integrations id on the bound profile.'
+                        : 'Bind a profile with api_integrations (flow settings), or add integrations on that profile first.'
+                    }
+                  />
+                  <p className="desc" style={{ marginTop: 0 }}>
+                    prompt_ref on Tool(api) is an optional wait/filler line before HTTP. Leave empty
+                    to call immediately after ARM.
+                  </p>
+                  <div className="actions tight">
+                    <button
+                      type="button"
+                      className="btn secondary sm"
+                      onClick={() => onEnsureApiToolResults?.(n.id)}
+                    >
+                      Ensure success / fail / error edges
+                    </button>
+                  </div>
+                  <p className="desc">
+                    Required: three outgoing edges kind=tool_result with option success, fail, and
+                    error.
+                  </p>
+                </>
               )}
             </>
           )}
@@ -956,11 +1004,11 @@ export default function Inspector({
         />
 
         <SelectField
-          label="Intent catalog profile"
+          label="Bound profile (intents + Tool api)"
           value={catalogProfileId}
           onChange={(v) => onCatalogProfileId?.(v)}
           options={profileIds}
-          desc="allowed_intents chips come from this profile's catalog. Default is the first answer pin for this flow."
+          desc="Intent chips and Tool api_id list come from this profile. Also sent as profile_id when publishing Tool api flows. Stored in this browser only."
         />
       </PanelSection>
 

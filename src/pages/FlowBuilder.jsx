@@ -58,7 +58,7 @@ const NODE_HELP = {
   ListenSlot: 'Collect a value from the caller.',
   Decide: 'Branch without speaking.',
   Inform: 'Answer from a knowledge binding (FAQ).',
-  Tool: 'Transfer or hang up. Irreversible once armed.',
+  Tool: 'HTTP lookup/write (api), transfer, or hang up. Transfer/hangup are terminal; api continues the graph.',
   End: 'Terminal node.',
 }
 
@@ -79,6 +79,7 @@ const BURST_MS = 3000
 const PANEL_KEY = 'orch_builder_panel'
 const PANEL_W_KEY = 'orch_builder_panel_width'
 const LINES_KEY = 'orch_builder_lines'
+const flowProfileKey = (id) => `orch_cc_flow_profile:${id}`
 const PANEL_W = { min: 300, max: 680, fallback: 360 }
 const clampPanel = (w) =>
   Math.round(Math.min(PANEL_W.max, window.innerWidth * 0.55, Math.max(PANEL_W.min, w)))
@@ -154,6 +155,7 @@ function BuilderInner() {
   const [catalogProfileId, setCatalogProfileId] = useState('')
   const [profileIds, setProfileIds] = useState([])
   const [intentCatalog, setIntentCatalog] = useState([])
+  const [apiIntegrationIds, setApiIntegrationIds] = useState([])
   const wrapRef = useRef(null)
   const panelRef = useRef(null)
 
@@ -314,7 +316,8 @@ function BuilderInner() {
       const ids = (profiles.profiles ?? []).map((p) => p.id)
       setProfileIds(ids)
       const pinned = (pins.pins ?? []).find((p) => p.flow_id === flowId)
-      setCatalogProfileId(pinned?.profile_id || ids[0] || '')
+      const stored = readPref(flowProfileKey(flowId), '')
+      setCatalogProfileId(stored || pinned?.profile_id || ids[0] || '')
       setServerIssues([])
       history.current = { past: [], future: [], at: 0, burst: 0 }
       setLoaded(true)
@@ -336,15 +339,24 @@ function BuilderInner() {
   useEffect(() => {
     if (!catalogProfileId) {
       setIntentCatalog([])
+      setApiIntegrationIds([])
       return
     }
+    writePref(flowProfileKey(flowId), catalogProfileId)
     let cancelled = false
     ;(async () => {
+      const apply = (got) => {
+        if (cancelled || !got) return
+        setIntentCatalog(got.intent_catalog ?? [])
+        setApiIntegrationIds(
+          (got.api_integrations ?? []).map((a) => a.id).filter((id) => (id ?? '').trim()),
+        )
+      }
       try {
         const draft = await api.getProfileDraft(catalogProfileId)
         const got = draft.document ?? draft.doc
-        if (!cancelled && got) {
-          setIntentCatalog(got.intent_catalog ?? [])
+        if (got) {
+          apply(got)
           return
         }
       } catch {
@@ -352,16 +364,45 @@ function BuilderInner() {
       }
       try {
         const v = await api.getProfileVersion(catalogProfileId, 'latest')
-        const got = v.document ?? v.doc
-        if (!cancelled) setIntentCatalog(got?.intent_catalog ?? [])
+        apply(v.document ?? v.doc)
       } catch {
-        if (!cancelled) setIntentCatalog([])
+        if (!cancelled) {
+          setIntentCatalog([])
+          setApiIntegrationIds([])
+        }
       }
     })()
     return () => {
       cancelled = true
     }
+  }, [catalogProfileId, flowId])
+
+  const flowProfileOpts = useCallback(() => {
+    const hasApi = (docRef.current.nodes ?? []).some(
+      (n) => n.type === 'Tool' && (n.tool ?? '').trim() === 'api',
+    )
+    if (!hasApi) return {}
+    if (!catalogProfileId) return null
+    return {
+      profile_id: catalogProfileId,
+      profile_version: 'latest',
+    }
   }, [catalogProfileId])
+
+  const explainFlowApiError = (e) => {
+    const code = e?.details?.code || e?.code
+    const map = {
+      api_profile_required: 'Bind a profile (inspector → Bound profile) before publishing Tool api flows.',
+      api_profile_missing: 'That profile_id is not published / unknown on the server.',
+      api_id_unknown: 'Tool api_id is not on the bound profile’s api_integrations.',
+      api_tool_result_missing: 'Tool api needs tool_result edges for success, fail, and error.',
+      api_tool_result_option: 'tool_result edges need option success|fail|error.',
+      api_tool_result_duplicate: 'Duplicate tool_result option on the same Tool api node.',
+    }
+    const hint = map[code]
+    const base = e.detailText ? `${e.message} (${e.detailText})` : e.message || 'failed'
+    return hint ? `${base} — ${hint}` : base
+  }
 
   // Leaving with unsaved work: a 30-node flow is an hour of clicking. The app
   // uses a plain BrowserRouter (no data router, so no useBlocker), so in-app
@@ -791,16 +832,21 @@ function BuilderInner() {
     }
   }
   const checkServer = async () => {
+    const opts = flowProfileOpts()
+    if (opts === null) {
+      toast.push('err', 'Bind a profile before validating a flow that uses Tool api')
+      return
+    }
     setBusy(true)
     try {
-      await api.validateFlow(flowId, docForWire())
+      await api.validateFlow(flowId, docForWire(), opts)
       setServerIssues([])
       toast.ok('Server validate: ok')
     } catch (e) {
       setServerIssues([
         {
           level: 'error',
-          message: e.detailText ? `${e.message} (${e.detailText})` : e.message || 'Server validate failed',
+          message: explainFlowApiError(e),
         },
       ])
       toast.fail(e, 'Server validate')
@@ -813,14 +859,19 @@ function BuilderInner() {
       toast.push('err', `Fix ${errors.length} error(s) before publishing`)
       return
     }
+    const opts = flowProfileOpts()
+    if (opts === null) {
+      toast.push('err', 'Bind a profile before publishing a flow that uses Tool api')
+      return
+    }
     setBusy(true)
     try {
       persistLayout(layoutRef.current)
       const wire = docForWire()
-      await api.validateFlow(flowId, wire)
+      await api.validateFlow(flowId, wire, opts)
       setServerIssues([])
       await api.putFlowDraft(flowId, wire)
-      const got = await api.publishFlow(flowId, wire)
+      const got = await api.publishFlow(flowId, wire, opts)
       setDirty(false)
       setPublishedVersion(got.version)
       setWarnings(got.warnings ?? [])
@@ -836,7 +887,7 @@ function BuilderInner() {
         setServerIssues([
           {
             level: 'error',
-            message: e.detailText ? `${e.message} (${e.detailText})` : e.message,
+            message: explainFlowApiError(e),
           },
         ])
       }
@@ -965,6 +1016,79 @@ function BuilderInner() {
     sections.isOpen(id, !SECTION_DEFAULT_CLOSED.includes(id)),
   )
   const createPanelEdge = (from, to, kind) => createEdge(from, to, kind, { select: false })
+
+  /** Stub End nodes + tool_result edges for Tool(api) success|fail|error. */
+  const ensureApiToolResults = useCallback(
+    (nodeId) => {
+      const opts = catalog?.api_tool_result_options?.length
+        ? catalog.api_tool_result_options
+        : ['success', 'fail', 'error']
+      const d = docRef.current
+      if (!d.nodes.some((n) => n.id === nodeId)) return
+      const have = new Set(
+        d.edges
+          .filter((e) => e.from === nodeId && (e.kind ?? '') === 'tool_result')
+          .map((e) => (e.option ?? '').trim()),
+      )
+      const missing = opts.filter((o) => !have.has(o))
+      if (!missing.length) {
+        toast.ok('All three tool_result edges already present')
+        return
+      }
+      const anchor = layoutRef.current[nodeId] || { x: 200, y: 200 }
+      const newNodes = []
+      const newEdges = []
+      const layoutPatch = {}
+      let edgeAcc = [...d.edges]
+      missing.forEach((opt, i) => {
+        let endId = `${nodeId}_${opt}`
+        let n = 0
+        while (d.nodes.some((x) => x.id === endId) || newNodes.some((x) => x.id === endId)) {
+          n++
+          endId = `${nodeId}_${opt}_${n}`
+        }
+        newNodes.push({
+          id: endId,
+          type: 'End',
+        })
+        layoutPatch[endId] = {
+          x: anchor.x + (i - 1) * (NODE_W + 40),
+          y: anchor.y + ROW_GAP,
+        }
+        const eid = nextEdgeId(edgeAcc, nodeId, endId)
+        const edge = {
+          id: eid,
+          from: nodeId,
+          to: endId,
+          kind: 'tool_result',
+          option: opt,
+        }
+        newEdges.push(edge)
+        edgeAcc = [...edgeAcc, edge]
+      })
+      record(false)
+      setDocState((cur) => ({
+        ...cur,
+        nodes: [...cur.nodes, ...newNodes],
+        edges: [...cur.edges, ...newEdges],
+      }))
+      setLayout((l) => {
+        const next = {
+          ...l,
+          ...layoutPatch,
+        }
+        writeLocalLayout(flowId, next, [
+          ...docRef.current.nodes.map((n) => n.id),
+          ...newNodes.map((n) => n.id),
+        ])
+        return next
+      })
+      setDirty(true)
+      toast.ok(`Added tool_result: ${missing.join(', ')} → End stubs (rewire as needed)`)
+    },
+    [catalog, flowId, record, toast],
+  )
+
   return (
     <>
       <div
@@ -1366,12 +1490,14 @@ function BuilderInner() {
                     layout={layout}
                     issues={issues}
                     onCreateEdge={createPanelEdge}
+                    onEnsureApiToolResults={ensureApiToolResults}
                     onFocusNode={focusNode}
                     onHoverEdge={setHoverEdgeId}
                     allowedIntentIds={allowedIntentIds}
                     catalogProfileId={catalogProfileId}
                     onCatalogProfileId={setCatalogProfileId}
                     profileIds={profileIds}
+                    apiIntegrationIds={apiIntegrationIds}
                   />
                 </div>
               </SectionProvider>
