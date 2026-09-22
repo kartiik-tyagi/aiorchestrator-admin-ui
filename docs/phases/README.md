@@ -36,6 +36,6 @@ These are **UI-only** implementation plans for `aiorchestrator-admin-ui`. Implem
 | **6.5** | API Tool | [6.5_speak_templates_typed_listen.md](./6.5_speak_templates_typed_listen.md) | Speak templates + typed ListenSlot. |
 | **6.6** | API Tool | [6.6_tutorial_soak.md](./6.6_tutorial_soak.md) | Tutorial/fieldGuide + UI soak. |
 
-**Cursor:** Waves **0–5 Closed**. **Wave 6 AUTOPILOT** in flight — [ADMIN_UI_WAVE6_AUTOPILOT.md](./ADMIN_UI_WAVE6_AUTOPILOT.md), gap [WAVE_6_API_TOOL_GAP.md](./WAVE_6_API_TOOL_GAP.md).
+**Cursor:** Waves **0–6 Closed**. Wave 6 DONE — [.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md](../../.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md).
 
 Each phase file has the same shape: operator outcome, in/out, backend contract, current baseline, UX, files, do/do-not, exit criteria, verify, risks.

@@ -1,6 +1,6 @@
 # Wave 6 gap — External API Tool + Typed Listen (UI sync)
 
-**Status:** AUTOPILOT authorized (2026-09-22). Runbook: [ADMIN_UI_WAVE6_AUTOPILOT.md](./ADMIN_UI_WAVE6_AUTOPILOT.md).  
+**Status:** Closed (2026-09-22). DONE: [ADMIN_UI_WAVE6_AUTOPILOT_DONE.md](../.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md). Runbook: [ADMIN_UI_WAVE6_AUTOPILOT.md](./ADMIN_UI_WAVE6_AUTOPILOT.md).  
 **Backend:** `com.coraltele.aiorchestrator` doc 23 Locked; L4 **API.0–API.9 Closed**.  
 **UI repo:** `aiorchestrator-admin-ui` only. Consume Control API; no Go changes in this wave.  
 **Parent law:** [PROGRAMME.md](./PROGRAMME.md) hard rules still apply (patch-not-rebuild JSON, no `cx`, secrets write-only, catalog-first enums).
