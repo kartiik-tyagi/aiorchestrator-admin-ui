@@ -256,6 +256,10 @@ export default function Tutorial() {
             <strong>language.allowed</strong> — not enforced by the server, but an empty list means
             the desk advertises no locale to callers
           </li>
+          <li>
+            optional for CRM: <strong>api_integrations</strong> + <strong>API secrets</strong> (auth
+            ≠ none), then Publish so secrets snapshot
+          </li>
         </ul>
         <div className="inline-note">
           Creating a profile is not the same as publishing one. The server's readiness flag counts
@@ -298,6 +302,11 @@ export default function Tutorial() {
           </li>
           <li>
             Add <code>binding_refs</code> for any <code>Inform</code> node, or publish fails
+          </li>
+          <li>
+            For CRM: Tool verb <code>api</code>, pick <code>api_id</code> from the bound profile,
+            press <strong>Ensure success / fail / error edges</strong>, then Speak with{' '}
+            <code>{'{{slot.customer_name}}'}</code> after success
           </li>
           <li>
             Set <code>max_retries</code> and a repair prompt on each Listen node, and draw a{' '}

@@ -116,6 +116,24 @@ export const FIELD_GUIDE = [
             plain:
               'Leave empty on a new desk. Do not paste a production catalog into a demo profile.',
           },
+          {
+            name: 'timezone / date_order',
+            req: 'conditional',
+            what: 'IANA timezone and dmy|mdy|ymd for typed Listen date/time. Required when any ListenSlot uses date, time, or datetime.',
+            plain: 'Set timezone (e.g. Asia/Kolkata) before collecting dates from callers.',
+          },
+          {
+            name: 'api_integrations',
+            req: 'optional',
+            what: 'Non-secret Tool(api) definitions: URL, maps, success policy. Secrets live under API secrets, never in this JSON.',
+            plain: 'Declare CRM/HTTP lookups here, then set the secret below, then reference the id from a Tool api step on the flow.',
+          },
+          {
+            name: 'API secrets',
+            req: 'conditional',
+            what: 'Masked PUT/GET on /v1/profiles/{id}/api-secrets. Required when auth_type is not none. Snapshotted on profile publish.',
+            plain: 'Write-only tokens. Publish stays blocked until each authed integration has a secret set.',
+          },
         ],
       },
       {
@@ -521,20 +539,26 @@ export const FIELD_GUIDE = [
             req: 'required',
             what: 'One of nine closed types from the catalog. Entry, Speak, ListenChoice, ListenLanguage, ListenSlot, Decide, Inform, Tool, End.',
             plain:
-              'What this step does. Speak = the bot talks. ListenChoice = it waits and picks a branch. Tool = it transfers or hangs up. End = the conversation stops.',
+              'What this step does. Speak = the bot talks. ListenChoice = it waits and picks a branch. Tool = transfer, hangup, or HTTP api. End = the conversation stops.',
           },
           {
             name: 'prompt_ref',
             req: 'conditional',
-            what: 'Any node with a prompt_ref must have text for the default locale in the prompts table.',
-            plain: 'Which piece of writing this step reads out. Needed on every Speak node.',
+            what: 'Any node with a prompt_ref must have text for the default locale in the prompts table. On Tool(api) this is an optional wait/filler line.',
+            plain: 'Which piece of writing this step reads out. Needed on every Speak node. Supports {{slot.*}} and allowlisted {{session.*}} templates.',
           },
           {
             name: 'Tool verb',
             req: 'conditional',
-            what: 'Required on Tool nodes: transfer | hangup. Once armed it always completes — barge is disabled, the closing line plays, then it executes once.',
+            what: 'Required on Tool nodes: transfer | hangup | api. transfer/hangup are terminal; api is non-terminal and continues via tool_result.',
             plain:
-              'Only on Tool steps. "transfer" hands the caller to a human, "hangup" ends the call. Once the bot commits to this it cannot be interrupted — that is deliberate.',
+              '"transfer" hands the caller to a human, "hangup" ends the call, "api" calls a profile integration then continues the graph.',
+          },
+          {
+            name: 'api_id',
+            req: 'conditional',
+            what: 'Required when tool=api. Must exist on the bound profile’s api_integrations. Publish sends profile_id so the server can resolve it.',
+            plain: 'Which CRM/API integration to call. Pick the bound profile first so this list fills in.',
           },
           {
             name: 'matrix_intent',
@@ -548,6 +572,12 @@ export const FIELD_GUIDE = [
             req: 'conditional',
             what: 'Required on Inform nodes, and must also be listed in binding_refs.',
             plain: 'Which FAQ this answering step reads from.',
+          },
+          {
+            name: 'ListenSlot input_type / length_rule',
+            req: 'optional',
+            what: 'Typed listen (string|number|phone|email|date|time|datetime) plus optional length_rule for phone/number. Legacy validator still required.',
+            plain: 'Tell the bot what kind of value to expect. Confirm is suggested on for number/phone/email.',
           },
           {
             name: 'repair max_retries / unclear_prompt_ref',
@@ -566,6 +596,12 @@ export const FIELD_GUIDE = [
             req: 'required',
             what: 'Ids must be unique; both endpoints must be existing nodes.',
             plain: 'The line between two steps, and which way it points.',
+          },
+          {
+            name: 'tool_result + option',
+            req: 'conditional',
+            what: 'Required for Tool(api): three edges with option success|fail|error. Consumed by the runtime after HTTP settles.',
+            plain: 'Where the graph goes after an API call succeeds, fails business rules, or errors.',
           },
           {
             name: 'Kind',

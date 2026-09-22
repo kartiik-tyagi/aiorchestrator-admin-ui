@@ -9,7 +9,8 @@
  *   1 Engines    nothing runs without listen/think/speak bound to a gateway
  *   2 Profile    references those gateways; publish fails if they are not registered
  *   3 Bindings   must exist before a flow's Inform node can reference one
- *   4 Flow       references bindings, and publish enforces the whole graph
+ *   3b API       optional CRM: profile api_integrations + secrets, then Tool api on the flow
+ *   4 Flow       references bindings / Tool api_ids, and publish enforces the whole graph
  *   5 Pin        needs a published profile AND a published flow to point at
  *   6 Settings   ops values and failure prompts; not needed for a first call
  */
@@ -27,7 +28,7 @@ export const SETUP_STEPS = [
     to: '/CC/admin/profiles',
     label: 'Profiles',
     short: 'Profile',
-    why: 'Create the bot identity and publish version 1 — voice, locales, routers.',
+    why: 'Create the bot identity and publish version 1 — voice, locales, routers. Add api_integrations + API secrets here for CRM Tool(api).',
   },
   {
     n: 3,
@@ -42,7 +43,7 @@ export const SETUP_STEPS = [
     to: '/CC/admin/flows',
     label: 'Flows',
     short: 'Flow',
-    why: 'Draw the conversation graph and publish it. This is the bulk of the work.',
+    why: 'Draw the conversation graph and publish it. For CRM: Tool verb api + api_id + three tool_result edges; bind the profile before publish.',
   },
   {
     n: 5,
