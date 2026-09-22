@@ -21,6 +21,7 @@ import {
 import { setDirtyGuard } from '../lib/dirtyGuard'
 import { validateProfile } from '../lib/profileValidate'
 import Industrial from './profile/Industrial'
+import ApiIntegrations from './profile/ApiIntegrations'
 /**
  * Full profile document editor.
  *
@@ -76,6 +77,9 @@ const emptyDoc = (id) => ({
   speak_allow_canonical_fallback: true,
   product: 'call_center',
   intent_catalog: [],
+  timezone: '',
+  date_order: 'dmy',
+  api_integrations: [],
 })
 export default function Profiles() {
   const { catalog, gateways, idsFor, reloadStatus } = useCatalog()
@@ -579,6 +583,8 @@ This removes the profile and all its published ` +
                   </Section>
 
                   <Industrial doc={doc} patch={patch} patchIn={patchIn} catalog={catalog} />
+
+                  <ApiIntegrations doc={doc} patch={patch} catalog={catalog} />
 
                   {!!versions.length && (
                     <Section title="Published versions">
