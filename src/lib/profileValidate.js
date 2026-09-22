@@ -4,7 +4,12 @@
  * operator there faster and explains the rule in words.
  */
 
-import { INTENT_ACTIONS, INTENT_SCOPES, PROFILE_INTERRUPT_MODES } from '../api/types.js'
+import {
+  DATE_ORDER,
+  INTENT_ACTIONS,
+  INTENT_SCOPES,
+  PROFILE_INTERRUPT_MODES,
+} from '../api/types.js'
 
 const LADDER_TIERS = ['clip', 'template', 'llm']
 const INTENT_ID_RE = /^[a-z0-9][a-z0-9_]{0,63}$/
@@ -157,6 +162,45 @@ export function validateProfile(doc, gateways) {
     err(`persona.tts.pace must be a finite number greater than 0 (got ${tts.pace})`)
   if (tts.temperature != null && !Number.isFinite(tts.temperature))
     err('persona.tts.temperature must be a finite number')
+
+  /* ---- timezone / date_order / api_integrations (doc 23) ---- */
+  const tz = (doc.timezone ?? '').trim()
+  if (tz && (/\s/.test(tz) || tz.length > 64)) err('timezone must be an IANA name (no spaces)')
+  const order = (doc.date_order ?? '').trim()
+  if (order && !DATE_ORDER.includes(order))
+    err(`date_order must be ${DATE_ORDER.join('|')} (got "${order}")`)
+
+  const seenApi = new Set()
+  for (const [i, api] of (doc.api_integrations ?? []).entries()) {
+    const id = (api?.id ?? '').trim()
+    if (!id) {
+      err(`api_integrations[${i}] needs an id`)
+      continue
+    }
+    if (seenApi.has(id)) err(`api_integrations duplicate id "${id}"`)
+    else seenApi.add(id)
+    const url = (api?.url ?? '').trim()
+    if (url) {
+      const insecure = /^http:\/\//i.test(url)
+      const https = /^https:\/\//i.test(url)
+      if (!https && !insecure) err(`api "${id}" url must be http(s)`, id)
+      if (insecure && !api.allow_insecure_http)
+        err(`api "${id}" uses http:// — set allow_insecure_http for lab only, or use https`, id)
+    }
+    const kind = (api?.kind ?? '').trim()
+    const success = api?.success ?? {}
+    if (kind === 'write') {
+      const requires = success.success_requires ?? []
+      const httpOk = success.http_ok ?? []
+      const httpOnly204 =
+        !!success.http_only && httpOk.length === 1 && Number(httpOk[0]) === 204
+      if (!requires.length && !httpOnly204)
+        err(
+          `api "${id}" kind write needs success_requires (or http_only with http_ok [204] only)`,
+          id,
+        )
+    }
+  }
 
   return issues
 }

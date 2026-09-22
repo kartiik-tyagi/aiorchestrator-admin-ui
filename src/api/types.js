@@ -44,8 +44,40 @@ export const EDGE_KINDS = [
   'global',
 ]
 
-/** Tool verbs allowed on a Tool node. */
-export const TOOL_VERBS = ['transfer', 'hangup']
+/** Tool verbs allowed on a Tool node (catalog.tools preferred at runtime). */
+export const TOOL_VERBS = ['transfer', 'hangup', 'api']
+
+/** tool_result option values for Tool(api) — catalog.api_tool_result_options preferred. */
+export const API_TOOL_RESULT_OPTIONS = ['success', 'fail', 'error']
+
+/** Profile api_integrations.kind — fallback until catalog grows a key. */
+export const API_KINDS = ['safe_read', 'write']
+
+/** Profile api_integrations.auth_type — catalog.api_auth_types preferred. */
+export const API_AUTH_TYPES = ['none', 'api_key', 'bearer', 'basic', 'headers']
+
+/** API success.mode — catalog.api_success_modes preferred. */
+export const API_SUCCESS_MODES = ['http_ok', 'fields', 'bool', 'compare', 'presence']
+
+/** ListenSlot input_type — catalog.listen_input_types preferred. */
+export const LISTEN_INPUT_TYPES = [
+  'string',
+  'number',
+  'phone',
+  'email',
+  'date',
+  'time',
+  'datetime',
+]
+
+/** Profile date_order — catalog.date_order preferred. */
+export const DATE_ORDER = ['dmy', 'mdy', 'ymd']
+
+/** Allowlisted Speak {{session.*}} keys (internal/flow/speak_templates.go). */
+export const SESSION_TEMPLATE_KEYS = ['ani', 'language', 'caller_name', 'session_id']
+
+/** ListenSlot length_rule.op for phone/number. */
+export const LENGTH_RULE_OPS = ['eq', 'min', 'max', 'between']
 
 /** ListenSlot validators — copy of internal/flow/slot.go until the catalog exposes them. */
 export const SLOT_VALIDATORS = ['nonempty', 'enum', 'regex']
@@ -120,6 +152,11 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string[]} audit_event_types
  * @property {string[]} speak_render_modes     configured | smart
  * @property {string[]} tts_locales_v1         the 11 locales bulbul:v3 supports
+ * @property {string[]} [api_tool_result_options]  success | fail | error
+ * @property {string[]} [api_success_modes]
+ * @property {string[]} [api_auth_types]
+ * @property {string[]} [listen_input_types]
+ * @property {string[]} [date_order]           dmy | mdy | ymd
  */
 
 /* ---------------------------------------------------------------- gateways */
@@ -272,6 +309,9 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {{name?: string, instructions?: string, voice_id?: string,
  *   voice?: Record<string, string>, tts?: {pace?: number, temperature?: number}}} [persona]
  * @property {string} [product]  call_center or empty (legacy)
+ * @property {string} [timezone]  IANA — required when ListenSlot uses date/time/datetime
+ * @property {string} [date_order]  dmy | mdy | ymd
+ * @property {Array<Object>} [api_integrations]  non-secret Tool(api) defs (doc 23)
  * @property {Array<{id: string, scope: string, action: string, department?: string,
  *   product?: string, examples?: string[], description?: string}>} [intent_catalog]
  * @property {Object} [conversation_policy]
@@ -316,9 +356,11 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  *
  * Publish gates worth remembering:
  *  - exactly one Entry node, and entry_node_id must point at it
- *  - Tool nodes need tool = transfer | hangup
+ *  - Tool nodes need tool = transfer | hangup | api
+ *  - Tool api needs api_id and three tool_result edges (success|fail|error)
  *  - Inform nodes need a binding_ref that also appears in binding_refs
  *  - every prompt_ref needs text in default_locale
+ *  - Speak templates: {{slot.*}} and {{session.ani|language|caller_name|session_id}} only
  *  - matrix intents unique, action must be "transfer", number required
  *  - a transfer Tool must resolve to a matrix row (node.matrix_intent, else the
  *    first outgoing edge carrying matrix_intent)
@@ -334,6 +376,12 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} [repair_edge_id]
  * @property {string} [exhausted_edge_id]
  *
+ * @typedef {Object} FlowSlotLengthRule
+ * @property {string} op          eq | min | max | between
+ * @property {number} [n]
+ * @property {number} [min]
+ * @property {number} [max]
+ *
  * @typedef {Object} FlowSlot
  * @property {string} key
  * @property {string} validator   nonempty | enum | regex
@@ -342,6 +390,8 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {boolean} [confirm]
  * @property {boolean} [redact]
  * @property {string} [class]     none | confidential
+ * @property {string} [input_type]  string | number | phone | email | date | time | datetime
+ * @property {FlowSlotLengthRule} [length_rule]
  *
  * @typedef {Object} FlowDecideWhen
  * @property {string} slot
@@ -370,7 +420,8 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} type          one of NODE_TYPES
  * @property {string} [prompt_ref]
  * @property {string} [binding_ref] required on Inform
- * @property {string} [tool]        required on Tool: transfer | hangup
+ * @property {string} [tool]        required on Tool: transfer | hangup | api
+ * @property {string} [api_id]      required when tool is api — profile api_integrations id
  * @property {FlowNodeRepair} [repair]
  * @property {FlowSlot} [slot]
  * @property {FlowDecide} [decide]

@@ -210,6 +210,16 @@ export const api = {
   putProfileDraft: (id, doc) => request('PUT', `/v1/profiles/${enc(id)}/draft`, doc),
   validateProfile: (id, doc) => request('POST', `/v1/profiles/${enc(id)}/validate`, doc),
   listProfileVersions: (id) => request('GET', `/v1/profiles/${enc(id)}/versions`),
+  /* ---- profile API secrets (masked; never in profile JSON) ---- */
+  listProfileApiSecrets: (id) => request('GET', `/v1/profiles/${enc(id)}/api-secrets`),
+  getProfileApiSecret: (id, apiId) =>
+    request('GET', `/v1/profiles/${enc(id)}/api-secrets/${enc(apiId)}`),
+  putProfileApiSecret: (id, apiId, authPayload) =>
+    request('PUT', `/v1/profiles/${enc(id)}/api-secrets/${enc(apiId)}`, {
+      auth_payload: authPayload,
+    }),
+  deleteProfileApiSecret: (id, apiId) =>
+    request('DELETE', `/v1/profiles/${enc(id)}/api-secrets/${enc(apiId)}`),
   /* ---- flows ---- */
   listFlows: (tenant = getTenant()) =>
     request(
@@ -223,8 +233,24 @@ export const api = {
   deleteFlow: (id) => request('DELETE', `/v1/flows/${enc(id)}`),
   getFlowDraft: (id) => request('GET', `/v1/flows/${enc(id)}/draft`),
   putFlowDraft: (id, doc) => request('PUT', `/v1/flows/${enc(id)}/draft`, doc),
-  publishFlow: (id, doc) => request('POST', `/v1/flows/${enc(id)}/versions`, doc),
-  validateFlow: (id, doc) => request('POST', `/v1/flows/${enc(id)}/validate`, doc),
+  publishFlow: (id, doc, opts = {}) =>
+    request(
+      'POST',
+      `/v1/flows/${enc(id)}/versions${q({
+        profile_id: opts.profile_id,
+        profile_version: opts.profile_version,
+      })}`,
+      doc,
+    ),
+  validateFlow: (id, doc, opts = {}) =>
+    request(
+      'POST',
+      `/v1/flows/${enc(id)}/validate${q({
+        profile_id: opts.profile_id,
+        profile_version: opts.profile_version,
+      })}`,
+      doc,
+    ),
   listFlowVersions: (id) => request('GET', `/v1/flows/${enc(id)}/versions`),
   getFlowVersion: (id, ver) => request('GET', `/v1/flows/${enc(id)}/versions/${enc(String(ver))}`),
   /* ---- bindings ---- */

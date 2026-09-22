@@ -3,8 +3,8 @@
 **Repo:** `aiorchestrator-admin-ui` only.  
 **Backend:** consume existing Control API (`/v1`) and MI API (`/mi/v1`). **No Go, SQL, or catalog changes.**  
 **Products:** Call Center at `/CC/admin`, Meeting Intelligence at `/MI/admin`.  
-**Status:** Waves **0.1–4.2** Closed (see `.agent/work/ADMIN_UI_AUTOPILOT_DONE.md`).  
-**Next programme:** Wave **5** — MI Profile memory + insights gap closure ([WAVE_5_GAP.md](./WAVE_5_GAP.md)). Implement **one phase at a time**, in the order in [README.md](./README.md).
+**Status:** Waves **0.1–5.6** Closed. Wave **6** AUTOPILOT in flight — External API Tool + Typed Listen ([WAVE_6_API_TOOL_GAP.md](./WAVE_6_API_TOOL_GAP.md), [ADMIN_UI_WAVE6_AUTOPILOT.md](./ADMIN_UI_WAVE6_AUTOPILOT.md)).  
+**Prior:** Wave **5** — [WAVE_5_GAP.md](./WAVE_5_GAP.md) Closed.
 
 These documents are the coding source of truth for this programme. Do not invent screens, fields, or APIs that are not listed here.
 

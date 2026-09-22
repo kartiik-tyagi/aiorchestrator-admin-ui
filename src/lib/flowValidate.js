@@ -9,12 +9,17 @@
  */
 
 import {
+  API_TOOL_RESULT_OPTIONS,
   FLOW_INTERRUPT_MODES,
   FLOW_SCHEMA_ID,
+  SESSION_TEMPLATE_KEYS,
   SLOT_VALIDATORS,
+  TOOL_VERBS as TOOL_VERBS_FALLBACK,
   WELL_KNOWN_SLOTS,
 } from '../api/types.js'
-const TOOL_VERBS = ['transfer', 'hangup']
+
+const TEMPLATE_RE = /\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}/g
+
 export function validateFlow(doc, catalog) {
   const issues = []
   const err = (message, ref) =>
@@ -32,6 +37,11 @@ export function validateFlow(doc, catalog) {
   const nodeTypes = catalog?.node_types ?? []
   const edgeKinds = catalog?.edge_kinds ?? []
   const dispositions = catalog?.disposition_final ?? []
+  const toolVerbs = catalog?.tools?.length ? catalog.tools : TOOL_VERBS_FALLBACK
+  const apiResultOpts = catalog?.api_tool_result_options?.length
+    ? catalog.api_tool_result_options
+    : API_TOOL_RESULT_OPTIONS
+  const sessionKeys = new Set(SESSION_TEMPLATE_KEYS)
   if (doc.schema_id !== FLOW_SCHEMA_ID) err(`schema_id must be ${FLOW_SCHEMA_ID}`)
   if (!doc.default_locale?.trim()) err('default_locale required')
   if (doc.cx != null && typeof doc.cx === 'object' && Object.keys(doc.cx).length > 0) {
@@ -50,8 +60,8 @@ export function validateFlow(doc, catalog) {
     if (byId.has(id)) err(`duplicate node id "${id}"`, id)
     if (nodeTypes.length && !nodeTypes.includes(n.type)) err(`unknown node type "${n.type}"`, id)
     if (n.type === 'Entry') entryCount++
-    if (n.type === 'Tool' && !TOOL_VERBS.includes((n.tool ?? '').trim()))
-      err(`Tool node "${id}" needs tool = transfer or hangup`, id)
+    if (n.type === 'Tool' && !toolVerbs.includes((n.tool ?? '').trim()))
+      err(`Tool node "${id}" needs tool = transfer, hangup, or api`, id)
     if (n.type === 'Inform' && !n.binding_ref?.trim())
       err(`Inform node "${id}" needs a binding_ref`, id)
     byId.set(id, n)
@@ -318,8 +328,6 @@ export function validateFlow(doc, catalog) {
   for (const e of doc.edges) {
     if ((e.kind ?? '') === 'global' && !globalListed.has(e.id))
       warn('This global is not listed on the flow — the bot will never offer it.', e.id)
-    if ((e.kind ?? '') === 'tool_result')
-      warn(`edge "${e.id}" is kind "tool_result", which nothing in the runtime consumes`, e.id)
   }
   const LISTEN_FOR_INTENTS = new Set(['ListenChoice', 'ListenLanguage', 'ListenSlot'])
   for (const n of doc.nodes) {
@@ -405,6 +413,56 @@ export function validateFlow(doc, catalog) {
   }
   if (transferTools > 0 && (doc.matrix ?? []).length === 0)
     err('a transfer Tool requires a non-empty matrix')
+
+  /* ---- Tool(api): api_id + three distinct tool_result options (doc 23) ---- */
+  for (const n of doc.nodes) {
+    if (n.type !== 'Tool' || (n.tool ?? '').trim() !== 'api') continue
+    const apiId = (n.api_id ?? '').trim()
+    if (!apiId) err(`api Tool "${n.id}" needs an api_id (profile api_integrations id)`, n.id)
+    const seenOpt = new Set()
+    for (const e of doc.edges) {
+      if (e.from !== n.id || (e.kind ?? '') !== 'tool_result') continue
+      const opt = (e.option ?? '').trim()
+      if (!opt) {
+        err(`tool_result edge "${e.id}" from api Tool "${n.id}" needs option success|fail|error`, e.id)
+        continue
+      }
+      if (!apiResultOpts.includes(opt))
+        err(`tool_result option "${opt}" on "${e.id}" must be one of ${apiResultOpts.join('|')}`, e.id)
+      if (seenOpt.has(opt))
+        err(`api Tool "${n.id}" has duplicate tool_result option "${opt}"`, e.id)
+      seenOpt.add(opt)
+    }
+    for (const need of apiResultOpts) {
+      if (!seenOpt.has(need))
+        err(`api Tool "${n.id}" needs a tool_result edge with option "${need}"`, n.id)
+    }
+  }
+
+  /* ---- Speak templates: allowlisted session.* only (slot.* always OK here) ---- */
+  const scanText = (text, ref) => {
+    if (!text || typeof text !== 'string') return
+    TEMPLATE_RE.lastIndex = 0
+    let m
+    while ((m = TEMPLATE_RE.exec(text)) !== null) {
+      const path = m[1]
+      if (path.startsWith('slot.')) continue
+      if (path.startsWith('session.')) {
+        const key = path.slice('session.'.length)
+        if (!sessionKeys.has(key))
+          err(
+            `unknown Speak template {{${path}}} — session keys are ${[...sessionKeys].join('|')}`,
+            ref,
+          )
+        continue
+      }
+      err(`unknown Speak template {{${path}}} — use slot.* or session.* only`, ref)
+    }
+  }
+  for (const [ref, locales] of Object.entries(doc.prompts ?? {})) {
+    if (!locales || typeof locales !== 'object') continue
+    for (const [loc, text] of Object.entries(locales)) scanText(text, `${ref}/${loc}`)
+  }
 
   /* ---- conversation_policy + node interrupt (internal/flow/policy.go) ---- */
   const ge0 = (v) => v != null && Number(v) < 0

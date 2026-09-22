@@ -1,7 +1,8 @@
 # Admin UI phase plans
 
 Programme lock: [PROGRAMME.md](./PROGRAMME.md).  
-Wave 5 gap inventory: [WAVE_5_GAP.md](./WAVE_5_GAP.md).
+Wave 5 gap inventory: [WAVE_5_GAP.md](./WAVE_5_GAP.md).  
+Wave 6 gap inventory (External API Tool + Typed Listen, study only): [WAVE_6_API_TOOL_GAP.md](./WAVE_6_API_TOOL_GAP.md).
 
 These are **UI-only** implementation plans for `aiorchestrator-admin-ui`. Implement one phase at a time. Do not start a later phase until the previous wave’s exit criteria pass (see PROGRAMME serial order).
 
@@ -28,8 +29,13 @@ These are **UI-only** implementation plans for `aiorchestrator-admin-ui`. Implem
 | **5.4** | MI memory | [5.4_mi_meeting_insights.md](./5.4_mi_meeting_insights.md) | I can read Summary/Feedback and refresh when stale. |
 | **5.5** | MI memory | [5.5_mi_terminology_home.md](./5.5_mi_terminology_home.md) | I can maintain the speech glossary without confusing it with the directory. |
 | **5.6** | MI memory | [5.6_mi_memory_insights_soak.md](./5.6_mi_memory_insights_soak.md) | Human soak proves memory + insights from `/MI/admin`. |
+| **6.1** | API Tool | [6.1_types_secrets_validator.md](./6.1_types_secrets_validator.md) | Types, secrets client, validator truth for Tool api. |
+| **6.2** | API Tool | [6.2_profile_api_integrations.md](./6.2_profile_api_integrations.md) | Profile api_integrations + timezone/date_order. |
+| **6.3** | API Tool | [6.3_profile_api_secrets.md](./6.3_profile_api_secrets.md) | Masked API secrets + publish gate. |
+| **6.4** | API Tool | [6.4_flow_tool_api.md](./6.4_flow_tool_api.md) | Flow Tool api + three edges + profile_id publish. |
+| **6.5** | API Tool | [6.5_speak_templates_typed_listen.md](./6.5_speak_templates_typed_listen.md) | Speak templates + typed ListenSlot. |
+| **6.6** | API Tool | [6.6_tutorial_soak.md](./6.6_tutorial_soak.md) | Tutorial/fieldGuide + UI soak. |
 
-**Cursor:** Waves **0–4 Closed**. Next implementable phase: **5.1**.  
-**Wave 5 AUTOPILOT:** [ADMIN_UI_WAVE5_AUTOPILOT.md](./ADMIN_UI_WAVE5_AUTOPILOT.md) (owner paste inside).
+**Cursor:** Waves **0–5 Closed**. **Wave 6 AUTOPILOT** in flight — [ADMIN_UI_WAVE6_AUTOPILOT.md](./ADMIN_UI_WAVE6_AUTOPILOT.md), gap [WAVE_6_API_TOOL_GAP.md](./WAVE_6_API_TOOL_GAP.md).
 
 Each phase file has the same shape: operator outcome, in/out, backend contract, current baseline, UX, files, do/do-not, exit criteria, verify, risks.
