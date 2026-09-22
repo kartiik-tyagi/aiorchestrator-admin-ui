@@ -22,6 +22,7 @@ import { setDirtyGuard } from '../lib/dirtyGuard'
 import { validateProfile } from '../lib/profileValidate'
 import Industrial from './profile/Industrial'
 import ApiIntegrations from './profile/ApiIntegrations'
+import ApiSecrets, { apiSecretsReady } from './profile/ApiSecrets'
 /**
  * Full profile document editor.
  *
@@ -100,6 +101,7 @@ export default function Profiles() {
   const [serverIssues, setServerIssues] = useState([])
   const [versions, setVersions] = useState([])
   const [dirty, setDirty] = useState(false)
+  const [apiSecretRows, setApiSecretRows] = useState([])
   const dirtyRef = useRef(false)
   dirtyRef.current = dirty
   const locales = catalog?.tts_locales_v1 ?? []
@@ -112,6 +114,13 @@ export default function Profiles() {
     [localIssues, serverIssues],
   )
   const errors = issues.filter((i) => i.level === 'error')
+  const secretGaps = useMemo(
+    () => apiSecretsReady(doc?.api_integrations, apiSecretRows),
+    [doc?.api_integrations, apiSecretRows],
+  )
+  const onApiSecretStatus = useCallback((secrets) => {
+    setApiSecretRows(secrets ?? [])
+  }, [])
 
   /** Shallow-merge a patch into the document. */
   const patch = useCallback((p) => {
@@ -149,6 +158,7 @@ export default function Profiles() {
       setServerIssues([])
       setVersions([])
       setDirty(false)
+      setApiSecretRows([])
       try {
         const vers = await api.listProfileVersions(id).catch(() => ({ versions: [] }))
         setVersions(vers.versions ?? [])
@@ -304,6 +314,13 @@ export default function Profiles() {
     if (!doc || !selected) return
     if (errors.length) {
       toast.push('err', `Fix ${errors.length} error(s) before publishing`)
+      return
+    }
+    if (secretGaps.length) {
+      toast.push(
+        'err',
+        `Set API secrets before publish: ${secretGaps.join(', ')} (auth_type is not none)`,
+      )
       return
     }
     setBusy(true)
@@ -498,7 +515,16 @@ This removes the profile and all its published ` +
                   <button className="btn secondary sm" onClick={() => void checkServer()} disabled={busy}>
                     Check
                   </button>
-                  <button className="btn" onClick={publish} disabled={busy || errors.length > 0}>
+                  <button
+                    className="btn"
+                    onClick={publish}
+                    disabled={busy || errors.length > 0 || secretGaps.length > 0}
+                    title={
+                      secretGaps.length
+                        ? `Missing API secrets: ${secretGaps.join(', ')}`
+                        : undefined
+                    }
+                  >
                     {busy ? 'Publishing…' : 'Publish version'}
                   </button>
                   <button
@@ -585,6 +611,12 @@ This removes the profile and all its published ` +
                   <Industrial doc={doc} patch={patch} patchIn={patchIn} catalog={catalog} />
 
                   <ApiIntegrations doc={doc} patch={patch} catalog={catalog} />
+
+                  <ApiSecrets
+                    profileId={selected}
+                    integrations={doc.api_integrations}
+                    onStatus={onApiSecretStatus}
+                  />
 
                   {!!versions.length && (
                     <Section title="Published versions">
