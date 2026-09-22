@@ -10,7 +10,7 @@ import {
   TextField,
   ToggleField,
 } from '../../components/ui'
-import { INTERRUPT_MODES } from '../../api/types.js'
+import { INTERRUPT_MODES, SESSION_TEMPLATE_KEYS } from '../../api/types.js'
 import { CHOICE_KINDS, LISTEN_TYPES, intentSuggestions } from '../../lib/flowGraph'
 import Connections from './Connections'
 import DecideEditor from './DecideEditor'
@@ -129,28 +129,71 @@ function PromptLocaleEditor({ promptRef, doc, setDoc, locales, label }) {
     (loc) => showAll || loc === doc.default_locale || (promptLocales[loc] ?? '') !== '',
   )
   const hidden = locales.length - shown.length
+  const insertToken = (loc, token) => {
+    const cur = promptLocales[loc] ?? ''
+    setDoc((d) => ({
+      ...d,
+      prompts: {
+        ...d.prompts,
+        [promptRef]: {
+          ...(d.prompts[promptRef] ?? {}),
+          [loc]: `${cur}${token}`,
+        },
+      },
+    }))
+  }
   return (
-    <Field label={label ?? `Prompt text — ${promptRef}`}>
+    <Field
+      label={label ?? `Prompt text — ${promptRef}`}
+      desc={`Templates: {{slot.<key>}} or {{session.${SESSION_TEMPLATE_KEYS.join('|')}}}. Unknown session.* fails publish.`}
+    >
       {shown.map((loc) => (
         <div className="locale-row" key={loc}>
           <code className={loc === doc.default_locale ? 'default' : undefined}>{loc}</code>
-          <textarea
-            rows={2}
-            value={promptLocales[loc] ?? ''}
-            placeholder={loc === doc.default_locale ? 'required' : 'optional'}
-            onChange={(e) =>
-              setDoc((d) => ({
-                ...d,
-                prompts: {
-                  ...d.prompts,
-                  [promptRef]: {
-                    ...(d.prompts[promptRef] ?? {}),
-                    [loc]: e.target.value,
+          <div style={{ flex: 1 }}>
+            <textarea
+              rows={2}
+              value={promptLocales[loc] ?? ''}
+              placeholder={
+                loc === doc.default_locale
+                  ? 'required — e.g. Hello {{slot.customer_name}}'
+                  : 'optional'
+              }
+              onChange={(e) =>
+                setDoc((d) => ({
+                  ...d,
+                  prompts: {
+                    ...d.prompts,
+                    [promptRef]: {
+                      ...(d.prompts[promptRef] ?? {}),
+                      [loc]: e.target.value,
+                    },
                   },
-                },
-              }))
-            }
-          />
+                }))
+              }
+            />
+            <div className="chips" style={{ marginTop: 4 }}>
+              {SESSION_TEMPLATE_KEYS.map((k) => (
+                <span
+                  key={k}
+                  className="chip"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => insertToken(loc, `{{session.${k}}}`)}
+                  title={`Insert {{session.${k}}}`}
+                >
+                  session.{k}
+                </span>
+              ))}
+              <span
+                className="chip"
+                style={{ cursor: 'pointer' }}
+                onClick={() => insertToken(loc, '{{slot.')}
+                title="Start a slot template"
+              >
+                slot.…
+              </span>
+            </div>
+          </div>
         </div>
       ))}
       {(hidden > 0 || showAll) && (
@@ -721,7 +764,11 @@ export default function Inspector({
 
         {n.type === 'ListenSlot' && (
           <PanelSection id="slot" title="Slot" icon={<IconSliders size={14} />}>
-            <SlotEditor slot={n.slot} onChange={(slot) => patchNode(n.id, { slot })} />
+            <SlotEditor
+              slot={n.slot}
+              onChange={(slot) => patchNode(n.id, { slot })}
+              catalog={catalog}
+            />
           </PanelSection>
         )}
 
