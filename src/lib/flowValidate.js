@@ -139,26 +139,45 @@ export function validateFlow(doc, catalog) {
 
   /* ---- edge shape per node type -------------------------------------------
    *
-   * None of this is in the Go publish validator — it lives in the cursor and
-   * only fires mid-call, where the failure mode is a released call rather than
-   * a 422. Every rule below maps to a specific error the runtime can raise:
+   * Graph-shape checks the Go publish validator does not always enforce, but
+   * the cursor will fail mid-call (released call). Keep them here.
    *
-   *   soleNext()          "no next edge from node" / "ambiguous next edges"
-   *   soleRepair()        "no repair edge drawn for on_exhausted"
-   *   allowlistedLocked() empty allowlist → every reply classifies unclear
-   *
-   * Checked here because the operator can still fix it cheaply.
+   * Kernel truth (latest):
+   *   - Entry / Speak / Inform: exactly one kind=next (soleNext)
+   *   - ListenChoice / ListenLanguage: ≥1 option|intent (classifier allowlist)
+   *   - ListenSlot: success advances via exactly one kind=next (commitSlotAndAdvance);
+   *     option|intent are optional (confirm / shortcut edges), not required
+   *   - listen_policy.repair_edge_id + exhausted_edge_id: two kind=repair edges
+   *     are intentional (OOD vs silence). Do not warn for that pair.
+   *   - Unreachable nodes: warn only — do not error on missing next/listen edges
+   *     (slot-declaration stubs and retired Speaks)
    */
   const outOf = (id) => doc.edges.filter((e) => e.from === id)
   const countKind = (id, kind) => outOf(id).filter((e) => (e.kind ?? '') === kind).length
-  const LISTEN_TYPES = ['ListenChoice', 'ListenLanguage', 'ListenSlot']
+
+  const entryForReach = doc.entry_node_id?.trim()
+  const reachable = new Set()
+  if (entryForReach && byId.has(entryForReach)) {
+    reachable.add(entryForReach)
+    const queue = [entryForReach]
+    while (queue.length) {
+      const cur = queue.shift()
+      for (const e of doc.edges) {
+        if (e.from === cur && byId.has(e.to) && !reachable.has(e.to)) {
+          reachable.add(e.to)
+          queue.push(e.to)
+        }
+      }
+    }
+  }
 
   for (const n of doc.nodes) {
     const id = n.id?.trim()
     if (!id) continue
+    const live = reachable.size === 0 || reachable.has(id)
 
     // Entry / Speak / Inform auto-advance through exactly one `next`.
-    if (['Entry', 'Speak', 'Inform'].includes(n.type)) {
+    if (['Entry', 'Speak', 'Inform'].includes(n.type) && live) {
       const nexts = countKind(id, 'next')
       if (nexts === 0)
         err(`${n.type} node "${id}" needs exactly one "next" edge — the call fails here`, id)
@@ -166,9 +185,8 @@ export function validateFlow(doc, catalog) {
         err(`${n.type} node "${id}" has ${nexts} "next" edges; exactly one is legal`, id)
     }
 
-    // An Inform that misses in the binding falls to its repair edge. No repair
-    // edge turns an ordinary FAQ miss into a released call.
-    if (n.type === 'Inform') {
+    // An Inform that misses in the binding falls to its repair edge.
+    if (n.type === 'Inform' && live) {
       const repairs = countKind(id, 'repair')
       if (repairs === 0)
         err(
@@ -179,37 +197,70 @@ export function validateFlow(doc, catalog) {
         err(`Inform node "${id}" has ${repairs} "repair" edges; exactly one is legal`, id)
     }
 
-    if (LISTEN_TYPES.includes(n.type)) {
-      // The classifier only ever sees option/intent edges leaving this node.
-      const choices = outOf(id).filter((e) => ['option', 'intent'].includes(e.kind ?? '')).length
-      if (choices === 0)
+    if (n.type === 'ListenChoice' || n.type === 'ListenLanguage') {
+      if (live) {
+        const choices = outOf(id).filter((e) => ['option', 'intent'].includes(e.kind ?? '')).length
+        if (choices === 0)
+          err(
+            `${n.type} node "${id}" has no "option" or "intent" edge — every reply will be unclear`,
+            id,
+          )
+      }
+    }
+
+    if (n.type === 'ListenSlot' && live) {
+      const nexts = countKind(id, 'next')
+      if (nexts === 0)
         err(
-          `${n.type} node "${id}" has no "option" or "intent" edge — every reply will be unclear`,
+          `ListenSlot node "${id}" needs exactly one "next" edge after a valid value — the call fails here`,
           id,
         )
+      else if (nexts > 1)
+        err(`ListenSlot node "${id}" has ${nexts} "next" edges; exactly one is legal`, id)
+    }
 
-      // repair policy present ⇒ the exhaust path must be drawn.
+    if (['ListenChoice', 'ListenLanguage', 'ListenSlot'].includes(n.type)) {
       const hasPolicy = n.repair && Object.keys(n.repair).length > 0
-      const repairs = countKind(id, 'repair')
-      if (hasPolicy && repairs === 0)
+      const repairs = outOf(id).filter((e) => (e.kind ?? '') === 'repair')
+      const repairIds = new Set(repairs.map((e) => e.id))
+      const policyRepair = (n.listen_policy?.repair_edge_id ?? '').trim()
+      const policyExhaust = (n.listen_policy?.exhausted_edge_id ?? '').trim()
+      const policyRefs = [policyRepair, policyExhaust].filter(Boolean)
+
+      if (live && hasPolicy && repairs.length === 0)
         err(
           `${n.type} node "${id}" sets a repair policy but has no "repair" edge — exhausting retries ends the call`,
           id,
         )
-      else if (repairs > 1)
-        // Live inbound publishes with several listen repair edges (server 200).
-        // Keep the note, but do not block Publish — the kernel does not.
+
+      for (const eid of policyRefs) {
+        if (!repairIds.has(eid))
+          err(
+            `${n.type} node "${id}" listen_policy references "${eid}" but that outgoing repair edge is missing`,
+            id,
+          )
+      }
+
+      if (policyRefs.length >= 1) {
+        // Dual repair (OOD + silence) is the supported listen_policy shape.
+        const extras = repairs.filter((e) => !policyRefs.includes(e.id))
+        if (extras.length)
+          warn(
+            `${n.type} node "${id}" has ${extras.length} repair edge(s) not listed in listen_policy — kernel ignores them when policy ids are set`,
+            id,
+          )
+      } else if (repairs.length > 1) {
         warn(
-          `${n.type} node "${id}" has ${repairs} "repair" edges; the runtime uses one — extra edges are ignored`,
+          `${n.type} node "${id}" has ${repairs.length} repair edges without listen_policy ids — kernel picks via PreferExhaustEdge (OOD/silence not distinguished)`,
           id,
         )
-      else if (!hasPolicy && repairs === 0)
+      } else if (live && !hasPolicy && repairs.length === 0) {
         warn(
           `${n.type} node "${id}" has no repair policy — an unclear reply leaves the bot silent`,
           id,
         )
+      }
     }
-
   }
 
   /* ---- CC.5 Decide / ListenSlot ----------------------------------------- */
@@ -526,20 +577,12 @@ export function validateFlow(doc, catalog) {
   }
 
   /* ---- warnings: unreachable nodes (server does not check; operators care) ---- */
-  if (entryId && byId.has(entryId)) {
-    const seen = new Set([entryId])
-    const queue = [entryId]
-    while (queue.length) {
-      const cur = queue.shift()
-      for (const e of doc.edges) {
-        if (e.from === cur && byId.has(e.to) && !seen.has(e.to)) {
-          seen.add(e.to)
-          queue.push(e.to)
-        }
-      }
-    }
+  if (reachable.size) {
     for (const n of doc.nodes) {
-      if (!seen.has(n.id)) warn(`node "${n.id}" is unreachable from Entry`, n.id)
+      if (reachable.has(n.id)) continue
+      // Intentional Decide allowlist stubs — never visited; key is what matters.
+      if (n.type === 'ListenSlot' && String(n.id).startsWith('declare_')) continue
+      warn(`node "${n.id}" is unreachable from Entry`, n.id)
     }
   }
   return issues
