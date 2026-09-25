@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview --host 0.0.0.0 --port 5183",
-    "format": "prettier --write \"src/**/*.{js,jsx,css}\""
+    "format": "prettier --write \"src/**/*.{js,jsx,css}\"",
+    "test": "node --test src/lib/"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.6",

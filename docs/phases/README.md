@@ -35,7 +35,13 @@ These are **UI-only** implementation plans for `aiorchestrator-admin-ui`. Implem
 | **6.4** | API Tool | [6.4_flow_tool_api.md](./6.4_flow_tool_api.md) | Flow Tool api + three edges + profile_id publish. |
 | **6.5** | API Tool | [6.5_speak_templates_typed_listen.md](./6.5_speak_templates_typed_listen.md) | Speak templates + typed ListenSlot. |
 | **6.6** | API Tool | [6.6_tutorial_soak.md](./6.6_tutorial_soak.md) | Tutorial/fieldGuide + UI soak. |
+| **7.1** | MI minutes | [7.1_mi_minutes_client_document.md](./7.1_mi_minutes_client_document.md) | I see the MoM as a readable document and can download it. |
+| **7.2** | MI minutes | [7.2_mi_meeting_page_state.md](./7.2_mi_meeting_page_state.md) | Tab switches, refresh and links never lose my edits. |
+| **7.3** | MI minutes | [7.3_mi_mom_edit_download.md](./7.3_mi_mom_edit_download.md) | I edit the draft in place, save, and download a draft PDF. |
+| **7.4** | MI minutes | [7.4_mi_official_versions_download.md](./7.4_mi_official_versions_download.md) | I read and download any approved version. |
+| **7.5** | MI minutes | [7.5_mi_minutes_history_compare.md](./7.5_mi_minutes_history_compare.md) | I can restore and compare draft/official versions. |
+| **7.6** | MI minutes | [7.6_mi_minutes_docx_branding_soak.md](./7.6_mi_minutes_docx_branding_soak.md) | Word download, branding, human soak. |
 
-**Cursor:** Waves **0–6 Closed**. Wave 6 DONE — [.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md](../../.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md).
+**Cursor:** Waves **0–6 Closed**. Wave 6 DONE — [.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md](../../.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md). Wave **7** (MI minutes) **Ready**, blocked on orchestrator MI.37/MI.38; start at **7.1**.
 
 Each phase file has the same shape: operator outcome, in/out, backend contract, current baseline, UX, files, do/do-not, exit criteria, verify, risks.

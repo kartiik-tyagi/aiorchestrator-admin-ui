@@ -2,6 +2,7 @@ import { NavLink, Navigate, Route, Routes } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { ToastProvider } from '../components/ui'
 import { getToken, setToken } from '../api/client'
+import { confirmLeaveDirty } from '../lib/dirtyGuard'
 import MiDashboard from '../pages/mi/Dashboard'
 import MiMeetingDetail from '../pages/mi/MeetingDetail'
 import MiMeetings from '../pages/mi/Meetings'
@@ -11,6 +12,11 @@ import MiRetention from '../pages/mi/Retention'
 import ProductSwitch from './ProductSwitch'
 
 const SIDEBAR_KEY = 'orch_mi_sidebar_collapsed'
+
+/** Sidebar links leave the page; unsaved minutes must be confirmed first (7.2). */
+function guardLeave(e) {
+  if (!confirmLeaveDirty()) e.preventDefault()
+}
 
 function Sidebar({ collapsed, onToggle }) {
   return (
@@ -46,19 +52,23 @@ function Sidebar({ collapsed, onToggle }) {
       )}
       <div className="nav-group">
         <div className="nav-section">Overview</div>
-        <NavLink to="/MI/admin" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/MI/admin" end className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          onClick={guardLeave}>
           <span className="nav-label">Home</span>
         </NavLink>
-        <NavLink to="/MI/admin/profiles" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/MI/admin/profiles" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          onClick={guardLeave}>
           <span className="nav-label">Profiles</span>
         </NavLink>
-        <NavLink to="/MI/admin/meetings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/MI/admin/meetings" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          onClick={guardLeave}>
           <span className="nav-label">Meetings</span>
         </NavLink>
       </div>
       <div className="side-foot">
         <div className="nav-section">Archive</div>
-        <NavLink to="/MI/admin/retention" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}>
+        <NavLink to="/MI/admin/retention" className={({ isActive }) => `nav-link ${isActive ? 'active' : ''}`}
+          onClick={guardLeave}>
           <span className="nav-label">Retention</span>
         </NavLink>
       </div>

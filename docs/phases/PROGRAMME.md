@@ -4,7 +4,8 @@
 **Backend:** consume existing Control API (`/v1`) and MI API (`/mi/v1`). **No Go, SQL, or catalog changes.**  
 **Products:** Call Center at `/CC/admin`, Meeting Intelligence at `/MI/admin`.  
 **Status:** Waves **0.1–6.6** Closed. Wave **6** DONE — [ADMIN_UI_WAVE6_AUTOPILOT_DONE.md](../.agent/work/ADMIN_UI_WAVE6_AUTOPILOT_DONE.md).  
-**Prior:** Wave **5** — [WAVE_5_GAP.md](./WAVE_5_GAP.md) Closed.
+**Prior:** Wave **5** — [WAVE_5_GAP.md](./WAVE_5_GAP.md) Closed.  
+**Next:** Wave **7** (MI minutes: document view, editing, draft/official PDF download) — **Ready**. Backend is orchestrator doc `docs/meeting-intelligence/16_MOM_DOCUMENT_AND_EXPORT.md` (MI.37–MI.40), delivered by the orchestrator programme; this repo still makes no Go/SQL change.
 
 These documents are the coding source of truth for this programme. Do not invent screens, fields, or APIs that are not listed here.
 
@@ -103,6 +104,14 @@ Shared chrome (theme, toasts, token box). Separate nav, API clients, and words.
 Waves **0–4 Closed**.  
 Wave **5** (memory + insights): start at **5.1**. Do not skip client (5.1) before screens.  
 **5.6** is human soak only (like 4.2).
+
+Wave **7** (MI minutes) interleaves with orchestrator phases:
+
+```text
+MI.37 → MI.38 → 7.1 → 7.2 → 7.3 → 7.4 → MI.39 → 7.5 → MI.40 → 7.6
+```
+
+**7.2** must close before any editing UI (7.3) ships. **7.6** ends in a human soak.
 
 ---
 

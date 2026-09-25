@@ -4,12 +4,18 @@ import { Card, TextField, useToast } from '../../components/ui'
 import { opSentence, unsupportedFields } from '../../lib/miDraft'
 import { miErrorSentence } from '../../lib/miErrors'
 
-export default function ApproveWizard({ meetingId, draft: draftProp }) {
+/**
+ * Two-step approve: preview (reconciliation + soft gates) then confirm.
+ * `dirty` blocks approval while the MoM tab holds unsaved edits; `onApproved`
+ * receives the new Official so the page can open it (wave 7.4).
+ */
+export default function ApproveWizard({ meetingId, draft: draftProp, dirty, onApproved }) {
   const toast = useToast()
   const [draft, setDraft] = useState(draftProp)
   const [label, setLabel] = useState('lab')
-  const [preview, setPreview] = useState(null)
+  const [rawPreview, setPreview] = useState(null)
   const [blocked, setBlocked] = useState([])
+  const [acked, setAcked] = useState(false)
   const [busy, setBusy] = useState(false)
   const [locked, setLocked] = useState(null)
 
@@ -23,12 +29,18 @@ export default function ApproveWizard({ meetingId, draft: draftProp }) {
       .catch(() => setDraft(null))
   }, [meetingId, draftProp])
 
+  // A preview is only valid for the draft version it was taken from.
+  const preview = rawPreview && draft && rawPreview.draft_version === draft.version ? rawPreview : null
+
   const bad = unsupportedFields(draft)
-  const cannotConfirm = bad.length > 0 || blocked.length > 0 || !preview
+  const gates = preview?.soft_gates ?? []
+  const needsAck = gates.length > 0 || !!preview?.acknowledge_required
+  const cannotConfirm = dirty || bad.length > 0 || blocked.length > 0 || !preview || (needsAck && !acked)
 
   const review = async () => {
     setBusy(true)
     setLocked(null)
+    setAcked(false)
     try {
       const prev = await mi.approvePreview(meetingId, { approver_label: label })
       setPreview(prev)
@@ -54,11 +66,16 @@ export default function ApproveWizard({ meetingId, draft: draftProp }) {
         draft_version: preview.draft_version,
         approver_label: label,
         reconciliation_ops: preview.reconciliation ?? [],
+        acknowledge_soft_gates: needsAck && acked,
       })
       setLocked(off)
+      setPreview(null)
       toast.ok(`Official version ${off.official_version} is locked.`)
+      onApproved?.(off)
     } catch (e) {
-      toast.push('err', miErrorSentence(e.code, e.message))
+      // Nothing was approved: say so, and drop a preview the server rejected.
+      if (e.code === 'draft_version_conflict') setPreview(null)
+      toast.push('err', `Not approved: ${miErrorSentence(e.code, e.message)}`)
     } finally {
       setBusy(false)
     }
@@ -67,10 +84,10 @@ export default function ApproveWizard({ meetingId, draft: draftProp }) {
   const flags = [...bad, ...blocked]
 
   return (
-    <Card
-      title="Approve"
-      hint="Two steps. Preview first — never skip straight to official."
-    >
+    <Card title="Approve" hint="Two steps. Preview first — never skip straight to official.">
+      {dirty && (
+        <div className="probe warn">The MoM tab has unsaved changes. Save or discard them before approving.</div>
+      )}
       {flags.length > 0 && (
         <div className="probe err">
           Approve is blocked while unsupported_ai remains:{' '}
@@ -79,7 +96,7 @@ export default function ApproveWizard({ meetingId, draft: draftProp }) {
       )}
       <TextField label="Approver label" value={label} onChange={setLabel} />
       <div className="actions tight">
-        <button className="btn" disabled={busy || !draft} onClick={review}>
+        <button className="btn" disabled={busy || !draft || dirty} onClick={review}>
           Review for approve
         </button>
         <button className="btn" disabled={busy || cannotConfirm} onClick={confirm}>
@@ -102,11 +119,23 @@ export default function ApproveWizard({ meetingId, draft: draftProp }) {
               </div>
             )
           })}
+          {needsAck && (
+            <div className="probe warn">
+              <strong>Quality warnings on this draft:</strong>
+              <ul className="plain-list">
+                {gates.map((g) => (
+                  <li key={g}>{g}</li>
+                ))}
+              </ul>
+              <label>
+                <input type="checkbox" checked={acked} onChange={(e) => setAcked(e.target.checked)} /> I have
+                reviewed these warnings
+              </label>
+            </div>
+          )}
         </div>
       )}
-      {locked && (
-        <div className="probe ok">Official version {locked.official_version} is locked.</div>
-      )}
+      {locked && <div className="probe ok">Official version {locked.official_version} is locked.</div>}
     </Card>
   )
 }

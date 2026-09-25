@@ -4,6 +4,7 @@ import { mi } from '../../api/mi/client'
 import { Card, NumberField, StringList, TextField, useToast } from '../../components/ui'
 import AskPane from './AskPane'
 import DirectoryPane from './DirectoryPane'
+import ExportBrandingCard from './ExportBrandingCard'
 import InsightsFlags from './InsightsFlags'
 import MemoryInbox from './MemoryInbox'
 import TerminologyPane from './TerminologyPane'
@@ -264,6 +265,8 @@ export default function MiProfileDetail() {
           Add section
         </button>
       </Card>
+
+      <ExportBrandingCard profileId={id} />
 
       <Card title="Advanced rules JSON" hint="Merged with min_segments on save. Invalid JSON blocks save.">
         <textarea

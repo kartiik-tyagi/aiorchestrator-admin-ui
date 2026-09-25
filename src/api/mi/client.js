@@ -14,6 +14,7 @@
  * Directory / inbox writes may require X-MI-KB-Token when the server sets MI_KB_TOKEN.
  */
 import { ApiError } from '../client.js'
+import { filenameFromDisposition, saveBlob } from '../../lib/miDownload.js'
 
 const enc = encodeURIComponent
 
@@ -75,16 +76,7 @@ async function request(method, path, body, extraHeaders, opts = {}) {
       } catch {
         data = { raw: text }
       }
-      const err = data?.error
-      const code =
-        (err && typeof err === 'object' && err.code) || (typeof err === 'string' ? err : undefined)
-      const message =
-        (err && typeof err === 'object' && err.message) ||
-        data?.message ||
-        (typeof err === 'string' ? err : null) ||
-        res.statusText ||
-        `HTTP ${res.status}`
-      throw new ApiError(message, res.status, code, typeof err === 'object' ? err?.details : undefined)
+      throw apiErrorFrom(res, data)
     }
     return text
   }
@@ -97,19 +89,67 @@ async function request(method, path, body, extraHeaders, opts = {}) {
       data = { raw: text }
     }
   }
-  if (!res.ok) {
-    const err = data?.error
-    const code =
-      (err && typeof err === 'object' && err.code) || (typeof err === 'string' ? err : undefined)
-    const message =
-      (err && typeof err === 'object' && err.message) ||
-      data?.message ||
-      (typeof err === 'string' ? err : null) ||
-      res.statusText ||
-      `HTTP ${res.status}`
-    throw new ApiError(message, res.status, code, typeof err === 'object' ? err?.details : undefined)
-  }
+  if (!res.ok) throw apiErrorFrom(res, data)
   return data
+}
+
+/**
+ * ApiError from an error response. `body` keeps the parsed JSON so callers can
+ * read extra fields (e.g. `current` on 409 draft_version_conflict).
+ * @param {Response} res
+ * @param {any} data
+ */
+function apiErrorFrom(res, data) {
+  const err = data?.error
+  const code =
+    (err && typeof err === 'object' && err.code) || (typeof err === 'string' ? err : undefined)
+  const message =
+    (err && typeof err === 'object' && err.message) ||
+    data?.message ||
+    (typeof err === 'string' ? err : null) ||
+    res.statusText ||
+    `HTTP ${res.status}`
+  const e = new ApiError(message, res.status, code, typeof err === 'object' ? err?.details : undefined)
+  e.body = data
+  return e
+}
+
+/**
+ * GET …/export and save the server-rendered file (MI.38). The server names the
+ * file; nothing is built in the browser.
+ * @param {string} id
+ * @param {{ format: 'pdf'|'md'|'json'|'docx', draft?: boolean, officialVersion?: number }} q
+ * @returns {Promise<{ filename: string, size: number }>}
+ */
+async function downloadExport(id, q) {
+  const qs = new URLSearchParams({ format: q.format })
+  if (q.draft) qs.set('draft', '1')
+  if (q.officialVersion) qs.set('official_version', String(q.officialVersion))
+  let res
+  try {
+    res = await fetch(`/mi/v1/meetings/${enc(id)}/export?${qs}`, { headers: { Accept: '*/*' } })
+  } catch {
+    throw new ApiError(
+      'Cannot reach Meeting Intelligence on :8011. Is the orchestrator running?',
+      0,
+      'network',
+    )
+  }
+  if (!res.ok) {
+    const text = await res.text()
+    let data = null
+    try {
+      data = text ? JSON.parse(text) : null
+    } catch {
+      data = { raw: text }
+    }
+    throw apiErrorFrom(res, data)
+  }
+  const blob = await res.blob()
+  const filename =
+    filenameFromDisposition(res.headers.get('Content-Disposition')) || `meeting-${id}.${q.format}`
+  saveBlob(blob, filename)
+  return { filename, size: blob.size }
 }
 
 /**
@@ -161,6 +201,10 @@ export const mi = {
   profileAsk: (id, b) => request('POST', `/mi/v1/profiles/${enc(id)}/ask`, b),
   createProfileAskSession: (id, b) =>
     request('POST', `/mi/v1/profiles/${enc(id)}/ask/sessions`, b || {}),
+
+  /** Export branding printed on downloaded MoM files (MI.40). */
+  getExportBranding: (id) => request('GET', `/mi/v1/profiles/${enc(id)}/export-branding`),
+  putExportBranding: (id, b) => request('PUT', `/mi/v1/profiles/${enc(id)}/export-branding`, b),
 
   /** @param {string} id @param {{ step?: string }} [b] step in enabled|resolve|extract|windowing */
   enableKg: (id, b) =>
@@ -218,24 +262,33 @@ export const mi = {
       'GET',
       `/mi/v1/meetings/${enc(id)}/transcript${generation != null ? `?generation=${enc(String(generation))}` : ''}`,
     ),
-  regenerate: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/regenerate`, b || {}),
+  /** 409 draft_has_edits unless opts.discardEdits (edits are kept in history, MI.37). */
+  regenerate: (id, opts = {}) =>
+    request(
+      'POST',
+      `/mi/v1/meetings/${enc(id)}/regenerate${opts.discardEdits ? '?discard_edits=1' : ''}`,
+      {},
+    ),
   refreshInsights: (id) =>
     request('POST', `/mi/v1/meetings/${enc(id)}/insights/refresh`, {}),
   getDraft: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/draft`),
   patchDraft: (id, b) => request('PATCH', `/mi/v1/meetings/${enc(id)}/draft`, b),
+  /** Draft history (MI.39), current draft only, newest first. */
+  listDraftRevisions: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/draft/revisions`),
+  getDraftRevision: (id, revId) =>
+    request('GET', `/mi/v1/meetings/${enc(id)}/draft/revisions/${enc(revId)}`),
+  restoreDraftRevision: (id, revId, expectedVersion) =>
+    request('POST', `/mi/v1/meetings/${enc(id)}/draft/revisions/${enc(revId)}/restore`, {
+      expected_version: expectedVersion,
+    }),
   approvePreview: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/approve`, b || {}),
   approveConfirm: (id, b) =>
     request('POST', `/mi/v1/meetings/${enc(id)}/approve/confirm`, b || {}),
   getOfficial: (id) => request('GET', `/mi/v1/meetings/${enc(id)}/official`),
   getOfficialHistory: (id) =>
     request('GET', `/mi/v1/meetings/${enc(id)}/official/history`),
-  exportMeeting: (id, q = {}) => {
-    const qs = new URLSearchParams()
-    if (q.format) qs.set('format', q.format)
-    if (q.draft) qs.set('draft', '1')
-    const tail = qs.toString()
-    return request('GET', `/mi/v1/meetings/${enc(id)}/export${tail ? `?${tail}` : ''}`)
-  },
+  /** Save a server-rendered MoM file: format pdf|md|json(|docx), draft or official_version. */
+  downloadExport,
   meetingAsk: (id, b) => request('POST', `/mi/v1/meetings/${enc(id)}/ask`, b),
   createMeetingAskSession: (id, b) =>
     request('POST', `/mi/v1/meetings/${enc(id)}/ask/sessions`, b || {}),

@@ -1,14 +1,30 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { mi } from '../../api/mi/client'
-import { Card, TextField, useToast } from '../../components/ui'
+import { Card, Modal, TextField, useToast } from '../../components/ui'
+import { confirmLeaveDirty } from '../../lib/dirtyGuard'
 import { miErrorSentence } from '../../lib/miErrors'
 import { jobTerminal, legalActions } from '../../lib/miLifecycle'
-import DraftEditor from './DraftEditor'
+import { useDraftWorkspace } from '../../lib/useDraftWorkspace'
 import ApproveWizard from './ApproveWizard'
-import OfficialPane from './OfficialPane'
 import AskPane from './AskPane'
 import InsightsPane from './InsightsPane'
+import MomTab from './minutes/MomTab'
+import OfficialTab from './minutes/OfficialTab'
+
+const TABS = [
+  ['overview', 'Overview'],
+  ['transcript', 'Transcript'],
+  ['mom', 'MoM'],
+  ['summary', 'Summary'],
+  ['feedback', 'AI Feedback'],
+  ['approve', 'Approve'],
+  ['official', 'Official'],
+  ['ask', 'Ask'],
+]
+const TAB_KEYS = new Set(TABS.map(([k]) => k))
+// Per-tab URL params; switching tabs drops the others.
+const TAB_PARAMS = { official: ['v'], transcript: ['seg'] }
 
 const CASE_B_FIXTURE = `{
   "provider_id": "coral",
@@ -26,7 +42,38 @@ export default function MiMeetingDetail() {
   const toast = useToast()
   const [facet, setFacet] = useState(null)
   const [err, setErr] = useState(null)
-  const [tab, setTab] = useState('overview')
+  const [params, setParams] = useSearchParams()
+  const rawTab = params.get('tab') === 'draft' ? 'mom' : params.get('tab')
+  const tab = TAB_KEYS.has(rawTab) ? rawTab : 'overview'
+  const setTab = useCallback(
+    (next, extra = {}) => {
+      setParams((p) => {
+        const q = new URLSearchParams(p)
+        q.set('tab', next)
+        for (const [t, keys] of Object.entries(TAB_PARAMS)) {
+          if (t !== next) keys.forEach((k) => q.delete(k))
+        }
+        for (const [k, v] of Object.entries(extra)) {
+          if (v == null || v === '') q.delete(k)
+          else q.set(k, String(v))
+        }
+        return q
+      })
+    },
+    [setParams],
+  )
+  const officialV = Number(params.get('v')) || null
+  const seg = params.get('seg') || ''
+  // Draft state lives here, not in the MoM tab, so tab switches keep edits (7.2).
+  const ws = useDraftWorkspace(id)
+  const dirtyRef = useRef(false)
+  useEffect(() => {
+    dirtyRef.current = ws.dirty
+  }, [ws.dirty])
+  const [momMode, setMomMode] = useState('preview')
+  const [authSegs, setAuthSegs] = useState([])
+  const [regenConfirm, setRegenConfirm] = useState(null)
+  const [regenBusy, setRegenBusy] = useState(false)
   const [body, setBody] = useState(CASE_B_FIXTURE)
   const [idem, setIdem] = useState(() => crypto.randomUUID())
   const [token, setToken] = useState(() => {
@@ -39,7 +86,6 @@ export default function MiMeetingDetail() {
   const [decision, setDecision] = useState(null)
   const [transcript, setTranscript] = useState(null)
   const [genPick, setGenPick] = useState('')
-  const [draft, setDraft] = useState(null)
   const [refreshBusy, setRefreshBusy] = useState(false)
 
   const load = useCallback(async () => {
@@ -66,7 +112,8 @@ export default function MiMeetingDetail() {
       )
     let t
     const tick = () => {
-      if (document.hidden) return
+      // Paused while the MoM has unsaved edits (7.2); resumes after save/discard.
+      if (document.hidden || dirtyRef.current) return
       void load()
     }
     if (!terminal || insightsBusy || facet.insights?.stale) t = window.setInterval(tick, 4000)
@@ -94,6 +141,54 @@ export default function MiMeetingDetail() {
       .then(setTranscript)
       .catch(() => setTranscript(null))
   }, [tab, id, genPick, facet?.transcript?.authoritative_generation])
+
+  // Authoritative transcript for attendees, duration and the owner picker.
+  const authGen = facet?.transcript?.authoritative_generation
+  useEffect(() => {
+    if (authGen == null) return
+    let live = true
+    mi.getTranscript(id)
+      .then((t) => live && setAuthSegs(t.segments ?? []))
+      .catch(() => live && setAuthSegs([]))
+    return () => {
+      live = false
+    }
+  }, [id, authGen])
+
+  // A new server draft (job finished, another tab saved) reloads the workspace,
+  // unless the reviewer has unsaved edits — those are never replaced silently.
+  const serverDraftVersion = facet?.draft?.version ?? null
+  const { reload: reloadDraft, dirty: wsDirty, loadedVersion } = ws
+  useEffect(() => {
+    if (serverDraftVersion == null || wsDirty || serverDraftVersion === loadedVersion) return
+    void reloadDraft()
+  }, [serverDraftVersion, wsDirty, loadedVersion, reloadDraft])
+
+  // Transcript deep link (?seg=) scrolls to and highlights the segment.
+  useEffect(() => {
+    if (tab !== 'transcript' || !seg || !transcript) return
+    document.getElementById(`seg-${seg}`)?.scrollIntoView({ block: 'center' })
+  }, [tab, seg, transcript])
+
+  const openSegment = useCallback((segmentId) => setTab('transcript', { seg: segmentId }), [setTab])
+
+  const regenerate = async (discardEdits) => {
+    setRegenBusy(true)
+    try {
+      await mi.regenerate(id, { discardEdits })
+      setRegenConfirm(null)
+      await load()
+      toast.ok(discardEdits ? 'Regenerating. Your edits were kept in history.' : 'Regenerating minutes.')
+    } catch (e) {
+      if (e.code === 'draft_has_edits') {
+        setRegenConfirm(e.body || {})
+      } else {
+        toast.push('err', miErrorSentence(e.code, e.message))
+      }
+    } finally {
+      setRegenBusy(false)
+    }
+  }
 
   const legal = legalActions(facet?.lifecycle, facet?.transcript?.authoritative_generation)
   const act = async (fn, label) => {
@@ -152,10 +247,17 @@ export default function MiMeetingDetail() {
           : ''
   const sealed = facet.transcript?.authoritative_generation != null
 
+  const guardLeave = (e) => {
+    if (!confirmLeaveDirty()) e.preventDefault()
+  }
+  const wide = tab === 'mom' || tab === 'official'
+
   return (
-    <div className="content">
+    <div className={`content ${wide ? 'wide' : ''}`}>
       <div className="page-head">
-        <Link to="/MI/admin/meetings">← Meetings</Link>
+        <Link to="/MI/admin/meetings" onClick={guardLeave}>
+          ← Meetings
+        </Link>
         <h1>{facet.title || facet.external_meeting_id || facet.id}</h1>
         <p className="desc">
           {facet.lifecycle} · profile {facet.profile_id} · {facet.external_meeting_id}
@@ -163,31 +265,20 @@ export default function MiMeetingDetail() {
         </p>
       </div>
 
-      <div className="actions tight">
-        <button className={`btn ${tab === 'overview' ? '' : 'secondary'} sm`} onClick={() => setTab('overview')}>
-          Overview
-        </button>
-        <button className={`btn ${tab === 'transcript' ? '' : 'secondary'} sm`} onClick={() => setTab('transcript')}>
-          Transcript
-        </button>
-        <button className={`btn ${tab === 'draft' ? '' : 'secondary'} sm`} onClick={() => setTab('draft')}>
-          MoM
-        </button>
-        <button className={`btn ${tab === 'summary' ? '' : 'secondary'} sm`} onClick={() => setTab('summary')}>
-          Summary
-        </button>
-        <button className={`btn ${tab === 'feedback' ? '' : 'secondary'} sm`} onClick={() => setTab('feedback')}>
-          AI Feedback
-        </button>
-        <button className={`btn ${tab === 'approve' ? '' : 'secondary'} sm`} onClick={() => setTab('approve')}>
-          Approve
-        </button>
-        <button className={`btn ${tab === 'official' ? '' : 'secondary'} sm`} onClick={() => setTab('official')}>
-          Official
-        </button>
-        <button className={`btn ${tab === 'ask' ? '' : 'secondary'} sm`} onClick={() => setTab('ask')}>
-          Ask
-        </button>
+      <div className="actions tight" role="tablist" aria-label="Meeting sections">
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            className={`btn ${tab === key ? '' : 'secondary'} sm`}
+            onClick={() => setTab(key)}
+          >
+            {label}
+            {key === 'mom' && ws.dirty ? ' •' : ''}
+          </button>
+        ))}
       </div>
 
       {facet.insights?.stale && (
@@ -201,7 +292,7 @@ export default function MiMeetingDetail() {
         </div>
       )}
 
-      {(tab === 'summary' || tab === 'feedback' || tab === 'draft') && (
+      {(tab === 'summary' || tab === 'feedback' || tab === 'mom') && (
         <div className="actions tight" style={{ marginBottom: 8 }}>
           <button
             type="button"
@@ -252,7 +343,12 @@ export default function MiMeetingDetail() {
                 </button>
               )}
               {legal.regenerate && (
-                <button className="btn secondary sm" onClick={() => act(() => mi.regenerate(id), 'Regenerate')}>
+                <button
+                  className="btn secondary sm"
+                  disabled={regenBusy || ws.dirty}
+                  title={ws.dirty ? 'Save or discard your MoM edits first' : undefined}
+                  onClick={() => void regenerate(false)}
+                >
                   Regenerate
                 </button>
               )}
@@ -335,7 +431,11 @@ export default function MiMeetingDetail() {
             ))}
           </select>
           {(transcript?.segments ?? []).map((s, i) => (
-            <div key={i} className="desc">
+            <div
+              key={s.id || i}
+              id={s.id ? `seg-${s.id}` : undefined}
+              className={`desc transcript-line ${seg && s.id === seg ? 'hit' : ''}`}
+            >
               {s.seq ?? i} · {s.display_name || s.speaker || s.user_id} · {s.text}
             </div>
           ))}
@@ -343,11 +443,42 @@ export default function MiMeetingDetail() {
         </Card>
       )}
 
-      {tab === 'draft' && <DraftEditor meetingId={id} onDraft={setDraft} />}
+      {tab === 'mom' && (
+        <MomTab
+          meetingId={id}
+          facet={facet}
+          ws={ws}
+          segments={authSegs}
+          mode={momMode}
+          setMode={setMomMode}
+          onOpenSegment={openSegment}
+        />
+      )}
       {tab === 'summary' && <InsightsPane mode="summary" insights={facet.insights} />}
       {tab === 'feedback' && <InsightsPane mode="feedback" insights={facet.insights} />}
-      {tab === 'approve' && <ApproveWizard meetingId={id} draft={draft} />}
-      {tab === 'official' && <OfficialPane meetingId={id} />}
+      {tab === 'approve' && (
+        <ApproveWizard
+          meetingId={id}
+          draft={ws.draft}
+          dirty={ws.dirty}
+          onApproved={(off) => {
+            void load()
+            setTab('official', { v: off.official_version })
+          }}
+        />
+      )}
+      {tab === 'official' && (
+        <OfficialTab
+          meetingId={id}
+          facet={facet}
+          segments={authSegs}
+          version={officialV}
+          setVersion={(v) => setTab('official', { v })}
+          draftVersion={ws.draft?.version ?? facet.draft?.version}
+          onOpenSegment={openSegment}
+          onGoToMom={() => setTab('mom')}
+        />
+      )}
       {tab === 'ask' && (
         <AskPane
           scope="meeting"
@@ -361,6 +492,23 @@ export default function MiMeetingDetail() {
           }
         />
       )}
+
+      <Modal
+        open={!!regenConfirm}
+        title="Replace your edits?"
+        hint="This draft has saved edits since it was generated. Regenerating replaces the draft; your edited version is kept in the draft history."
+        onClose={() => setRegenConfirm(null)}
+        onSubmit={() => void regenerate(true)}
+        submitLabel="Regenerate anyway"
+        busy={regenBusy}
+      >
+        {regenConfirm?.draft_version != null && (
+          <p className="desc">
+            Current draft v{regenConfirm.draft_version}
+            {regenConfirm.last_edited_at ? `, last edited ${new Date(regenConfirm.last_edited_at).toLocaleString()}` : ''}.
+          </p>
+        )}
+      </Modal>
     </div>
   )
 }

@@ -10,9 +10,15 @@ const COPY = {
   insufficient_transcript: 'There is no sealed transcript generation to regenerate from.',
   b_rejected_quality: 'The transcript did not meet the quality gate.',
   unsupported_ai_present: 'Approve is blocked — a structured field is still marked unsupported_ai.',
-  draft_version_conflict: 'This draft changed in another tab. Reload, then review again.',
+  draft_version_conflict: 'Someone saved this draft after you opened it. Choose which version to keep.',
   no_draft: 'Minutes are not ready yet. Wait for the job, or regenerate.',
   no_official: 'There is no official version yet.',
+  official_version_not_found: 'That approved version does not exist for this meeting.',
+  unsupported_format: 'The server cannot produce that file format.',
+  job_in_progress: 'A regeneration is running. Your edits are kept; save after it finishes.',
+  draft_has_edits: 'This draft has saved edits that regenerating would replace.',
+  soft_gates_unacknowledged: 'Confirm you have reviewed the quality warnings before approving.',
+  render_failed: 'The server could not render that document. Try another format and report it.',
   network: 'Cannot reach Meeting Intelligence on :8011. Is the orchestrator running?',
 }
 
