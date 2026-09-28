@@ -9,6 +9,7 @@ import InsightsFlags from './InsightsFlags'
 import MemoryInbox from './MemoryInbox'
 import TerminologyPane from './TerminologyPane'
 import { miErrorSentence } from '../../lib/miErrors'
+import { randomUUID } from '../../lib/randomId'
 import { setDirtyGuard } from '../../lib/dirtyGuard'
 
 function parseLangs(raw) {
@@ -338,7 +339,7 @@ export default function MiProfileDetail() {
           mono
           desc="UUID, set once. The archive stores it as a UUID."
         />
-        <button type="button" className="btn secondary sm" onClick={() => setKbId(crypto.randomUUID())}>
+        <button type="button" className="btn secondary sm" onClick={() => setKbId(randomUUID())}>
           Generate id
         </button>
         <TextField label="title" value={kbTitle} onChange={setKbTitle} />

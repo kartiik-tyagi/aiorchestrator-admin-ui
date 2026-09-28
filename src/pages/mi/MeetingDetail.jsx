@@ -5,6 +5,7 @@ import { Card, Modal, TextField, useToast } from '../../components/ui'
 import { confirmLeaveDirty } from '../../lib/dirtyGuard'
 import { miErrorSentence } from '../../lib/miErrors'
 import { jobTerminal, legalActions } from '../../lib/miLifecycle'
+import { randomUUID } from '../../lib/randomId'
 import { useDraftWorkspace } from '../../lib/useDraftWorkspace'
 import ApproveWizard from './ApproveWizard'
 import AskPane from './AskPane'
@@ -75,7 +76,7 @@ export default function MiMeetingDetail() {
   const [regenConfirm, setRegenConfirm] = useState(null)
   const [regenBusy, setRegenBusy] = useState(false)
   const [body, setBody] = useState(CASE_B_FIXTURE)
-  const [idem, setIdem] = useState(() => crypto.randomUUID())
+  const [idem, setIdem] = useState(() => randomUUID())
   const [token, setToken] = useState(() => {
     try {
       return localStorage.getItem(INGEST_KEY) ?? ''
@@ -379,7 +380,7 @@ export default function MiMeetingDetail() {
               desc="Reuse to test dedupe. Generate a new key for a distinct push."
             />
             <div className="actions tight">
-              <button type="button" className="btn secondary sm" onClick={() => setIdem(crypto.randomUUID())}>
+              <button type="button" className="btn secondary sm" onClick={() => setIdem(randomUUID())}>
                 New key
               </button>
               <button
