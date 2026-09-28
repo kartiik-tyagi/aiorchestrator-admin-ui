@@ -4,6 +4,9 @@ import react from '@vitejs/plugin-react'
 // The orchestrator Control API. Override with ORCH_URL when the lab runs elsewhere.
 const ORCH = process.env.ORCH_URL ?? 'http://127.0.0.1:8011'
 export default defineConfig({
+  // Dev stays at /. Production on voip is served under /aiorchestrator-admin/.
+  //   $env:VITE_BASE="/aiorchestrator-admin/"; npm run build
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   server: {
     // Bind IPv4 all-interfaces so phones/LAN can open http://<your-ipv4>:5183

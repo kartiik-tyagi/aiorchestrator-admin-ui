@@ -386,6 +386,7 @@ export const PORTS = ['listen', 'speak', 'think', 'translate', 'knowledge', 'ski
  * @property {string} key
  * @property {string} validator   nonempty | enum | regex
  * @property {string[]} [enum]
+ * @property {Record<string, string>} [aliases]  spoken/STT form → canonical enum value
  * @property {string} [pattern]
  * @property {boolean} [confirm]
  * @property {boolean} [redact]
