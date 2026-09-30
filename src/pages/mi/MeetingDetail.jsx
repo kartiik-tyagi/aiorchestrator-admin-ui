@@ -238,6 +238,14 @@ export default function MiMeetingDetail() {
   }
   if (!facet) return <div className="content">Loading…</div>
 
+  // Insights are computed from the SAVED draft, so regenerating with unsaved MoM
+  // edits would advise on text the reviewer has already replaced.
+  const insightsRegenBlock = !facet.draft?.ready
+    ? 'No draft yet — there is nothing to advise on.'
+    : ws.dirty
+      ? 'Save or discard your MoM edits first — insights are built from the saved draft.'
+      : ''
+
   const chip =
     decision?.decision === 'accepted_supersede'
       ? 'ok'
@@ -293,13 +301,15 @@ export default function MiMeetingDetail() {
         </div>
       )}
 
-      {(tab === 'summary' || tab === 'feedback' || tab === 'mom') && (
+      {/* Summary and Feedback carry their own Regenerate on the card, so this
+          stays only for MoM, where insights are not otherwise reachable. */}
+      {tab === 'mom' && (
         <div className="actions tight" style={{ marginBottom: 8 }}>
           <button
             type="button"
             className="btn secondary sm"
-            disabled={refreshBusy || !facet.draft?.ready}
-            title={!facet.draft?.ready ? 'No draft yet — cannot refresh insights' : undefined}
+            disabled={refreshBusy || !!insightsRegenBlock}
+            title={insightsRegenBlock || undefined}
             onClick={() => void refreshInsights()}
           >
             Refresh insights
@@ -455,8 +465,24 @@ export default function MiMeetingDetail() {
           onOpenSegment={openSegment}
         />
       )}
-      {tab === 'summary' && <InsightsPane mode="summary" insights={facet.insights} />}
-      {tab === 'feedback' && <InsightsPane mode="feedback" insights={facet.insights} />}
+      {tab === 'summary' && (
+        <InsightsPane
+          mode="summary"
+          insights={facet.insights}
+          onRegenerate={refreshInsights}
+          busy={refreshBusy}
+          disabledReason={insightsRegenBlock}
+        />
+      )}
+      {tab === 'feedback' && (
+        <InsightsPane
+          mode="feedback"
+          insights={facet.insights}
+          onRegenerate={refreshInsights}
+          busy={refreshBusy}
+          disabledReason={insightsRegenBlock}
+        />
+      )}
       {tab === 'approve' && (
         <ApproveWizard
           meetingId={id}
