@@ -5,6 +5,7 @@ import { Card, NumberField, StringList, TextField, useToast } from '../../compon
 import AskPane from './AskPane'
 import DirectoryPane from './DirectoryPane'
 import ExportBrandingCard from './ExportBrandingCard'
+import GroundingFlags from './GroundingFlags'
 import InsightsFlags from './InsightsFlags'
 import MemoryInbox from './MemoryInbox'
 import TerminologyPane from './TerminologyPane'
@@ -53,6 +54,8 @@ export default function MiProfileDetail() {
   const [dirty, setDirty] = useState(false)
   const [insightsSummary, setInsightsSummary] = useState(false)
   const [insightsFeedback, setInsightsFeedback] = useState(false)
+  const [kbFlags, setKbFlags] = useState({ enabled: false, resolve: false, extract: false })
+  const [normFlags, setNormFlags] = useState({ enabled: false, tier2: false, tier3_llm: false })
 
   const load = useCallback(async () => {
     try {
@@ -62,11 +65,33 @@ export default function MiProfileDetail() {
       const insights = asObj(rules.insights)
       setInsightsSummary(insights.summary === true || insights.summary === 'true')
       setInsightsFeedback(insights.feedback === true || insights.feedback === 'true')
+      const kbr = asObj(rules.kb)
+      setKbFlags({
+        enabled: kbr.enabled === true || kbr.enabled === 'true',
+        resolve: kbr.resolve === true || kbr.resolve === 'true',
+        extract: kbr.extract === true || kbr.extract === 'true',
+      })
+      const nr = asObj(rules.normalize)
+      setNormFlags({
+        enabled: nr.enabled === true || nr.enabled === 'true',
+        tier2: nr.tier2 === true || nr.tier2 === 'true',
+        tier3_llm: nr.tier3_llm === true || nr.tier3_llm === 'true',
+      })
       const rest = { ...rules }
       if (rest.case_b) {
         const { min_segments: _ms, ...cb } = rest.case_b
         rest.case_b = Object.keys(cb).length ? cb : undefined
         if (!rest.case_b) delete rest.case_b
+      }
+      if (rest.kb) {
+        const { enabled: _ke, resolve: _kr, extract: _kx, ...kbRest } = asObj(rest.kb)
+        if (Object.keys(kbRest).length) rest.kb = kbRest
+        else delete rest.kb
+      }
+      if (rest.normalize) {
+        const { enabled: _ne, tier2: _n2, tier3_llm: _n3, ...normRest } = asObj(rest.normalize)
+        if (Object.keys(normRest).length) rest.normalize = normRest
+        else delete rest.normalize
       }
       if (rest.insights) {
         const { summary: _s, feedback: _f, ...insRest } = asObj(rest.insights)
@@ -119,6 +144,8 @@ export default function MiProfileDetail() {
     if (min != null && min !== '') {
       rules.case_b = { ...(rules.case_b ?? {}), min_segments: Number(min) }
     }
+    rules.kb = { ...asObj(rest.kb), ...kbFlags }
+    rules.normalize = { ...asObj(rest.normalize), ...normFlags }
     const priorInsights = asObj(asObj(rest).insights)
     rules.insights = {
       ...priorInsights,
@@ -299,6 +326,16 @@ export default function MiProfileDetail() {
       />
 
       <MemoryInbox profileId={id} />
+
+      <GroundingFlags
+        kb={kbFlags}
+        normalize={normFlags}
+        onChange={({ kb, normalize }) => {
+          setDirty(true)
+          setKbFlags(kb)
+          setNormFlags(normalize)
+        }}
+      />
 
       <InsightsFlags
         summary={insightsSummary}
