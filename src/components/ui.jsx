@@ -412,6 +412,10 @@ export function Modal({
   onSubmit,
   submitLabel = 'Create',
   busy,
+  // Destructive dialogs colour their submit red and hold it shut until the
+  // caller says the confirmation is satisfied, so Enter alone cannot delete.
+  submitTone,
+  submitDisabled,
   children,
 }) {
   const panelRef = useRef(null)
@@ -480,7 +484,7 @@ export function Modal({
 
   const submit = (e) => {
     e.preventDefault()
-    if (!busy) onSubmit?.()
+    if (!busy && !submitDisabled) onSubmit?.()
   }
 
   return (
@@ -506,7 +510,11 @@ export function Modal({
           <button type="button" className="btn secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button type="submit" className="btn" disabled={busy}>
+          <button
+            type="submit"
+            className={`btn ${submitTone === 'danger' ? 'danger' : ''}`}
+            disabled={busy || submitDisabled}
+          >
             {busy ? 'Working…' : submitLabel}
           </button>
         </div>

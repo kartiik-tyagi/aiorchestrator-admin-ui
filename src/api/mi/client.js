@@ -193,6 +193,8 @@ export const mi = {
   createProfile: (b) => request('POST', '/mi/v1/profiles', b),
   getProfile: (id) => request('GET', `/mi/v1/profiles/${enc(id)}`),
   putProfile: (id, b) => request('PUT', `/mi/v1/profiles/${enc(id)}`, b),
+  /** Destructive. 409 profile_has_meetings while any meeting still pins this profile. */
+  deleteProfile: (id) => request('DELETE', `/mi/v1/profiles/${enc(id)}`, undefined, withKb()),
   putKbDoc: (id, docId, b) =>
     request('PUT', `/mi/v1/profiles/${enc(id)}/kb/${enc(docId)}`, b),
   deleteKbDoc: (id, docId) =>

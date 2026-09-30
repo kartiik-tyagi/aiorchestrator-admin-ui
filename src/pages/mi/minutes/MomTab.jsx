@@ -19,7 +19,16 @@ function timeOf(d) {
  * blocks editable in place. All state lives in `ws` (useDraftWorkspace) on the
  * meeting page, so switching tabs never loses edits.
  */
-export default function MomTab({ meetingId, facet, ws, segments, mode, setMode, onOpenSegment }) {
+export default function MomTab({
+  meetingId,
+  facet,
+  ws,
+  segments,
+  mode,
+  setMode,
+  onOpenSegment,
+  onRequestApprove,
+}) {
   const [discarding, setDiscarding] = useState(false)
   const [panel, setPanel] = useState(null) // null | 'history' | 'compare'
   const [dlPrompt, setDlPrompt] = useState(null) // { resolve }
@@ -48,6 +57,16 @@ export default function MomTab({ meetingId, facet, ws, segments, mode, setMode, 
 
   const editing = mode === 'edit'
   const canEdit = !jobRunning && !ws.jobBusy
+  const approvedVersion = facet?.official?.official_version ?? null
+  // Official is cut from the SAVED draft, so unsaved edits must land first —
+  // otherwise the operator approves a version they are not looking at.
+  const approveBlock = ws.dirty
+    ? 'Save or discard your edits first — Official is cut from the saved draft'
+    : jobRunning || ws.jobBusy
+      ? 'A regeneration is running'
+      : !ws.draft
+        ? 'No draft to approve yet'
+        : ''
 
   const onKeyDown = (e) => {
     const mod = e.ctrlKey || e.metaKey
@@ -160,6 +179,17 @@ export default function MomTab({ meetingId, facet, ws, segments, mode, setMode, 
           Compare
         </button>
         <DownloadMenu meetingId={meetingId} draft beforeDownload={beforeDownload} />
+        {/* Approving is the last step of reading this draft, so it lives here
+            rather than on a separate tab where the minutes are not visible. */}
+        <button
+          type="button"
+          className="btn sm"
+          disabled={!!approveBlock}
+          title={approveBlock || undefined}
+          onClick={() => onRequestApprove?.()}
+        >
+          {approvedVersion ? `Approve v${approvedVersion + 1}…` : 'Approve to Official…'}
+        </button>
       </div>
 
       {(jobRunning || ws.jobBusy) && (

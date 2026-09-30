@@ -7,19 +7,24 @@ import { miErrorSentence } from '../../lib/miErrors'
 import { jobTerminal, legalActions } from '../../lib/miLifecycle'
 import { randomUUID } from '../../lib/randomId'
 import { useDraftWorkspace } from '../../lib/useDraftWorkspace'
-import ApproveWizard from './ApproveWizard'
+import ApproveDialog from './ApproveDialog'
 import AskPane from './AskPane'
 import InsightsPane from './InsightsPane'
 import MomTab from './minutes/MomTab'
 import OfficialTab from './minutes/OfficialTab'
 
+/**
+ * Seven tabs, not eight. Approve used to be its own tab, which split one act
+ * across two screens — the minutes were read on MoM and approved somewhere they
+ * were not visible. It is now a dialog launched from the MoM toolbar, and
+ * `?tab=approve` links still work by landing on MoM with that dialog open.
+ */
 const TABS = [
   ['overview', 'Overview'],
   ['transcript', 'Transcript'],
   ['mom', 'MoM'],
   ['summary', 'Summary'],
   ['feedback', 'AI Feedback'],
-  ['approve', 'Approve'],
   ['official', 'Official'],
   ['ask', 'Ask'],
 ]
@@ -44,8 +49,10 @@ export default function MiMeetingDetail() {
   const [facet, setFacet] = useState(null)
   const [err, setErr] = useState(null)
   const [params, setParams] = useSearchParams()
-  const rawTab = params.get('tab') === 'draft' ? 'mom' : params.get('tab')
+  const askedTab = params.get('tab')
+  const rawTab = askedTab === 'draft' || askedTab === 'approve' ? 'mom' : askedTab
   const tab = TAB_KEYS.has(rawTab) ? rawTab : 'overview'
+  const [approveOpen, setApproveOpen] = useState(askedTab === 'approve')
   const setTab = useCallback(
     (next, extra = {}) => {
       setParams((p) => {
@@ -260,34 +267,73 @@ export default function MiMeetingDetail() {
     if (!confirmLeaveDirty()) e.preventDefault()
   }
   const wide = tab === 'mom' || tab === 'official'
+  const officialVersion = facet.official?.official_version ?? null
+  const lifecycleTone =
+    facet.lifecycle === 'cancelled'
+      ? 'err'
+      : facet.lifecycle === 'capturing'
+        ? 'warn'
+        : facet.lifecycle === 'ended'
+          ? 'ok'
+          : ''
+  const jobTone =
+    facet.job?.state === 'failed'
+      ? 'err'
+      : facet.job?.state === 'succeeded'
+        ? 'ok'
+        : facet.job?.state && facet.job.state !== 'idle'
+          ? 'warn'
+          : ''
 
   return (
     <div className={`content ${wide ? 'wide' : ''}`}>
-      <div className="page-head">
-        <Link to="/MI/admin/meetings" onClick={guardLeave}>
-          ← Meetings
-        </Link>
-        <h1>{facet.title || facet.external_meeting_id || facet.id}</h1>
-        <p className="desc">
-          {facet.lifecycle} · profile {facet.profile_id} · {facet.external_meeting_id}
-          {facet.partial_capture ? ' · partial capture' : ''}
-        </p>
+      <div className="page-head has-actions">
+        <div className="head-text">
+          <Link to="/MI/admin/meetings" onClick={guardLeave}>
+            ← Meetings
+          </Link>
+          <h1>{facet.title || facet.external_meeting_id || facet.id}</h1>
+          <p className="desc">
+            <code>{facet.external_meeting_id}</code> · profile{' '}
+            <Link to={`/MI/admin/profiles/${encodeURIComponent(facet.profile_id)}`} onClick={guardLeave}>
+              {facet.profile_id}
+            </Link>
+          </p>
+        </div>
+        <div className="page-actions">
+          <span className={`badge ${lifecycleTone}`}>{facet.lifecycle}</span>
+          {facet.partial_capture && <span className="badge warn">partial capture</span>}
+        </div>
       </div>
 
-      <div className="actions tight" role="tablist" aria-label="Meeting sections">
+      {/* The same tab bar the profile editor uses, so the two pages read alike.
+          It is sticky because the MoM document under it is long. */}
+      <div className="mi-tabbar" role="tablist" aria-label="Meeting sections">
         {TABS.map(([key, label]) => (
           <button
             key={key}
             type="button"
             role="tab"
             aria-selected={tab === key}
-            className={`btn ${tab === key ? '' : 'secondary'} sm`}
+            className={`mi-tab ${tab === key ? 'active' : ''}`}
             onClick={() => setTab(key)}
           >
             {label}
-            {key === 'mom' && ws.dirty ? ' •' : ''}
+            {key === 'mom' && ws.dirty && (
+              <span className="mi-tab-dot" title="Unsaved changes" aria-label="unsaved changes" />
+            )}
+            {key === 'official' && officialVersion != null && (
+              <span className="mi-tab-n">v{officialVersion}</span>
+            )}
+            {(key === 'summary' || key === 'feedback') && facet.insights?.stale && (
+              <span className="mi-tab-dot warn" title="Behind the current draft" />
+            )}
           </button>
         ))}
+        <span className="mi-tabbar-end">
+          <span className={`badge ${jobTone}`}>job {facet.job?.state || 'idle'}</span>
+          <span className="badge">{facet.draft?.ready ? `draft v${facet.draft.version ?? '?'}` : 'no draft'}</span>
+        </span>
       </div>
 
       {facet.insights?.stale && (
@@ -323,15 +369,71 @@ export default function MiMeetingDetail() {
 
       {tab === 'overview' && (
         <>
-          <Card title="Facet">
-            <p className="desc">
-              job {facet.job?.state || 'idle'}
-              {facet.job?.error_code ? ` (${facet.job.error_code})` : ''}
-              {facet.job?.id ? ` · ${facet.job.id}` : ''}
-              {' · '}draft {facet.draft?.ready ? 'ready' : 'not ready'}
-              {' · '}official {facet.official?.official_version ?? '—'}
-              {' · '}auth gen {facet.transcript?.authoritative_generation ?? '—'}
-            </p>
+          {/* Where this meeting stands, before any of the controls that move it. */}
+          <div className="mi-kpis">
+            <div className={`mi-kpi ${lifecycleTone}`}>
+              <div className="n">{facet.lifecycle}</div>
+              <div className="l">Lifecycle</div>
+              <div className="sub">
+                {facet.created_at ? `created ${new Date(facet.created_at).toLocaleString()}` : '—'}
+              </div>
+            </div>
+            <div className={`mi-kpi ${jobTone}`}>
+              <div className="n">{facet.job?.state || 'idle'}</div>
+              <div className="l">Intelligence job</div>
+              <div className="sub">
+                {facet.job?.error_code ? facet.job.error_code : facet.job?.id ? facet.job.id : 'no job yet'}
+              </div>
+            </div>
+            <div className={`mi-kpi ${facet.draft?.ready ? 'accent' : ''}`}>
+              <div className="n">{facet.draft?.ready ? `v${facet.draft.version ?? '?'}` : '—'}</div>
+              <div className="l">MoM draft</div>
+              <div className="sub">{facet.draft?.ready ? 'editable on the MoM tab' : 'not generated yet'}</div>
+            </div>
+            <div className={`mi-kpi ${officialVersion != null ? 'ok' : ''}`}>
+              <div className="n">{officialVersion != null ? `v${officialVersion}` : '—'}</div>
+              <div className="l">Official</div>
+              <div className="sub">{officialVersion != null ? 'locked and immutable' : 'not approved yet'}</div>
+            </div>
+            <div className="mi-kpi">
+              <div className="n">{facet.transcript?.authoritative_generation ?? '—'}</div>
+              <div className="l">Authoritative generation</div>
+              <div className="sub">
+                {(facet.transcript?.generations ?? []).length} generation
+                {(facet.transcript?.generations ?? []).length === 1 ? '' : 's'} pushed
+              </div>
+            </div>
+          </div>
+
+          <Card
+            title="Meeting facts"
+            hint="The pin this meeting was born with. Later profile edits do not rewrite it."
+          >
+            <dl className="kv">
+              <dt>id</dt>
+              <dd>{facet.id}</dd>
+              <dt>external_meeting_id</dt>
+              <dd>{facet.external_meeting_id}</dd>
+              <dt>participant_namespace</dt>
+              <dd>{facet.participant_namespace ?? '—'}</dd>
+              <dt>profile_id</dt>
+              <dd>{facet.profile_id}</dd>
+              <dt>created</dt>
+              <dd>{facet.created_at ?? '—'}</dd>
+              <dt>ended</dt>
+              <dd>{facet.ended_at ?? '—'}</dd>
+              <dt>partial capture</dt>
+              <dd>{facet.partial_capture ? 'yes' : 'no'}</dd>
+            </dl>
+          </Card>
+
+          <Card title="Lifecycle" hint="Only the transitions this meeting can legally make are offered.">
+            {!legal.startCapture && !legal.end && !legal.cancel && !legal.regenerate && (
+              <p className="desc" style={{ margin: 0 }}>
+                Nothing to do here — this meeting is {facet.lifecycle} with no sealed transcript to
+                regenerate from.
+              </p>
+            )}
             <div className="actions tight">
               {legal.startCapture && (
                 <button className="btn secondary sm" onClick={() => act(() => mi.startCapture(id), 'Start capture')}>
@@ -463,6 +565,7 @@ export default function MiMeetingDetail() {
           mode={momMode}
           setMode={setMomMode}
           onOpenSegment={openSegment}
+          onRequestApprove={() => setApproveOpen(true)}
         />
       )}
       {tab === 'summary' && (
@@ -481,17 +584,6 @@ export default function MiMeetingDetail() {
           onRegenerate={refreshInsights}
           busy={refreshBusy}
           disabledReason={insightsRegenBlock}
-        />
-      )}
-      {tab === 'approve' && (
-        <ApproveWizard
-          meetingId={id}
-          draft={ws.draft}
-          dirty={ws.dirty}
-          onApproved={(off) => {
-            void load()
-            setTab('official', { v: off.official_version })
-          }}
         />
       )}
       {tab === 'official' && (
@@ -519,6 +611,19 @@ export default function MiMeetingDetail() {
           }
         />
       )}
+
+      <ApproveDialog
+        open={approveOpen}
+        meetingId={id}
+        draft={ws.draft}
+        dirty={ws.dirty}
+        currentOfficialVersion={officialVersion}
+        onClose={() => setApproveOpen(false)}
+        onApproved={(off) => {
+          void load()
+          setTab('official', { v: off.official_version })
+        }}
+      />
 
       <Modal
         open={!!regenConfirm}

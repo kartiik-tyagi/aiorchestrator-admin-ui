@@ -1,5 +1,7 @@
 const COPY = {
   profile_not_found: 'That Minutes profile is not in the archive.',
+  profile_has_meetings:
+    'This profile still has meetings. Every meeting pins the profile it was born with, so the profile cannot be deleted while any of them exist.',
   meeting_not_found: 'That meeting is not in the archive.',
   invalid_lifecycle: 'That action is not allowed in this meeting state.',
   ingest_unauthorized: 'This lab requires an ingest token. Enter X-MI-Ingest-Token and try again.',

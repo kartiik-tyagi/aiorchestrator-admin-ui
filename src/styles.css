@@ -3519,3 +3519,490 @@ tr.flagged td {
 .branding-logo input[type='file'] {
   width: auto;
 }
+
+/* ============================================================ Meeting Intelligence
+   The MI console is read far more than it is edited: an operator opens it to
+   answer "is anything stuck?" before they open it to change a setting. These
+   classes serve that — a dashboard that ranks by what needs a human, and a
+   profile editor that stops being one long scroll. */
+
+/* -------------------------------------------------------------- dashboard */
+
+.mi-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(168px, 1fr));
+  gap: 0.8rem;
+  margin-bottom: 1rem;
+}
+
+/* A KPI is a stat that can be clicked through to the thing it counts. */
+.mi-kpi {
+  position: relative;
+  display: block;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 0.8rem 0.95rem 0.85rem;
+  box-shadow: var(--sh-1);
+  overflow: hidden;
+  color: inherit;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  cursor: default;
+}
+.mi-kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--border-3);
+}
+.mi-kpi.ok::before {
+  background: var(--ok);
+}
+.mi-kpi.warn::before {
+  background: var(--warn);
+}
+.mi-kpi.err::before {
+  background: var(--err);
+}
+.mi-kpi.accent::before {
+  background: var(--accent);
+}
+a.mi-kpi,
+button.mi-kpi {
+  cursor: pointer;
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+a.mi-kpi:hover,
+button.mi-kpi:hover {
+  border-color: var(--border-3);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+.mi-kpi .n {
+  font-size: 24px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.mi-kpi .l {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 0.2rem;
+}
+.mi-kpi .sub {
+  font-size: 11px;
+  color: var(--dim);
+  margin-top: 0.3rem;
+}
+
+/* Lifecycle / job distribution — a labelled bar per bucket. */
+.mi-meters {
+  display: grid;
+  gap: 0.55rem;
+}
+.mi-meter {
+  display: grid;
+  grid-template-columns: 104px 1fr 42px;
+  align-items: center;
+  gap: 0.7rem;
+  font-size: 12.5px;
+}
+.mi-meter-label {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.mi-meter-track {
+  /* Both of these are spans inside a grid cell, so they need an explicit box:
+     an inline element ignores height and width and the bar renders as a hairline. */
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.mi-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.25s var(--ease);
+}
+.mi-meter-fill.ok {
+  background: var(--ok);
+}
+.mi-meter-fill.warn {
+  background: var(--warn);
+}
+.mi-meter-fill.err {
+  background: var(--err);
+}
+.mi-meter-fill.idle {
+  background: var(--border-3);
+}
+.mi-meter-n {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
+
+/* Needs attention — one row per thing a human has to decide or unblock. */
+.mi-attn {
+  display: grid;
+  gap: 0.45rem;
+}
+.mi-attn-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  transition: border-color 0.12s;
+}
+.mi-attn-row:hover {
+  border-color: var(--border-3);
+}
+.mi-attn-row.err {
+  border-left-color: var(--err);
+}
+.mi-attn-row.warn {
+  border-left-color: var(--warn);
+}
+.mi-attn-row.info {
+  border-left-color: var(--accent);
+}
+.mi-attn-main {
+  min-width: 0;
+  flex: 1;
+}
+.mi-attn-title {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-attn-why {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+
+/* Compact recent-activity rows. */
+.mi-rows {
+  display: grid;
+  gap: 0.3rem;
+}
+.mi-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--r-sm);
+  border: 1px solid transparent;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+.mi-row:hover {
+  background: var(--panel-2);
+  border-color: var(--border);
+}
+.mi-row-main {
+  min-width: 0;
+  flex: 1;
+}
+.mi-row-title {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-row-sub {
+  font-size: 11px;
+  color: var(--dim);
+  font-family: var(--mono);
+  margin-top: 0.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-row-badges {
+  display: flex;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.mi-split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 1rem;
+  align-items: start;
+}
+
+/* ------------------------------------------------------ profile list + tabs */
+
+.mi-toolbar {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+.mi-toolbar input[type='search'] {
+  max-width: 280px;
+}
+/* Form controls default to width:100% in this console, which is right inside a
+   field and wrong in a toolbar — one of them takes the whole row and pushes the
+   rest onto a second and third line. */
+.mi-toolbar input[type='search'],
+.mi-toolbar select {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 180px;
+}
+.mi-toolbar select {
+  max-width: 200px;
+}
+.mi-toolbar .spacer {
+  flex: 1;
+}
+
+.mi-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 0.8rem;
+}
+.mi-profile-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.85rem 0.95rem;
+  background: linear-gradient(180deg, var(--panel), var(--bg-2));
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--sh-1);
+  transition:
+    border-color 0.12s,
+    transform 0.12s;
+}
+.mi-profile-card:hover {
+  border-color: var(--border-3);
+  transform: translateY(-1px);
+}
+.mi-profile-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.mi-profile-name {
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+.mi-profile-id {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mi-profile-foot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: auto;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* Tabs across the profile editor. The bar is sticky because Save lives in it,
+   and a 400-line form must never scroll its own Save button out of reach. */
+.mi-tabbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  display: flex;
+  gap: 0.15rem;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 0.35rem 0;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+.mi-tab {
+  appearance: none;
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 0.45rem 0.8rem;
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition:
+    color 0.12s,
+    background 0.12s,
+    border-color 0.12s;
+}
+.mi-tab:hover {
+  color: var(--text);
+  background: var(--panel-2);
+}
+.mi-tab.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  background: var(--panel-2);
+}
+.mi-tab.danger.active {
+  border-bottom-color: var(--err);
+}
+.mi-tab-n {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--dim);
+  background: var(--panel-3);
+  border-radius: 999px;
+  padding: 0 0.35rem;
+  min-width: 1.15rem;
+  text-align: center;
+}
+.mi-tab.active .mi-tab-n {
+  color: var(--text);
+}
+
+/* One editable Minutes section. `.row` is an auto-fit grid, so every child
+   becomes an equal column and the small buttons inflate into big empty boxes —
+   this is a flex row instead, where the two fields stretch and the controls
+   stay the size of their labels. */
+.mi-section-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding-bottom: 0.55rem;
+  margin-bottom: 0.55rem;
+  border-bottom: 1px solid var(--border);
+}
+.mi-section-row .field {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  min-width: 0;
+}
+/* first-of-type, not first-child: the ordinal span comes first in the row. */
+.mi-section-row .field:first-of-type {
+  flex: 0 0 210px;
+}
+.mi-section-row .btn {
+  flex: 0 0 auto;
+  margin-bottom: 1px;
+}
+.mi-section-ord {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  flex: 0 0 1.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Same problem, same shape: a field plus a button that must not become a column. */
+.mi-inline-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+}
+.mi-inline-field .field {
+  flex: 1 1 auto;
+  margin-bottom: 0;
+  min-width: 0;
+}
+.mi-inline-field .btn {
+  flex: 0 0 auto;
+  margin-bottom: 1px;
+}
+
+/* A tab that needs attention carries a dot rather than a number: "there are
+   unsaved edits" and "insights are stale" are states, not counts. */
+.mi-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+  flex: 0 0 6px;
+}
+.mi-tab-dot.warn {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
+
+/* One labelled group inside the approve dialog. */
+.mi-approve-block {
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  padding: 0.6rem 0.7rem;
+  margin-bottom: 0.8rem;
+  display: grid;
+  gap: 0.3rem;
+}
+.mi-approve-head {
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Dirty marker + save, pinned to the right of the tab bar. */
+.mi-tabbar-end {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-right: 0.15rem;
+}
+.mi-dirty {
+  font-size: 11.5px;
+  color: var(--warn);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.mi-dirty .dot {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px var(--warn-soft);
+}
+
+/* Danger zone — visually separated so it is never mistaken for a setting. */
+.mi-danger {
+  border-color: rgba(255, 95, 86, 0.35);
+  background:
+    linear-gradient(180deg, rgba(255, 95, 86, 0.05), transparent 40%),
+    var(--panel);
+}
+.mi-danger h2 {
+  color: #ffa19b;
+}
+.mi-confirm-name {
+  font-family: var(--mono);
+  color: var(--text);
+  background: var(--panel-3);
+  border-radius: 4px;
+  padding: 0.05em 0.35em;
+}
